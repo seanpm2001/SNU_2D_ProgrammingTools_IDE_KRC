@@ -1,0 +1,20 @@
+GLOBAL $( SETUP.PRIMFNS.ETC:210; PRINTVAL:211; BUILDEXP:212
+          ESCAPETONEXTCOMMAND:220; OUTSTATS:221
+          FINDCHANNEL:222; CLOSECHANNELS:223
+       $)
+
+GLOBAL $( ARG:225; ARGP:226; ARGMAX:227
+          MEMORIES:228; S:229   ||BASES FOR GARBAGE COLLECTION
+          REDS:230
+          ENTERSCRIPT:231
+          SCASECONV:232
+          STACKLIMIT:233
+          XSUBREDS:234
+       $)
+
+||----------------------------------------------------------------------
+||The KRC system is Copyright (c) D. A. Turner 1981
+||All  rights reserved.  It is distributed as free software under the
+||terms in the file "COPYING", which is included in the distribution.
+||----------------------------------------------------------------------
+

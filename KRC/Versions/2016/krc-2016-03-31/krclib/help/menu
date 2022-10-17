@@ -1,0 +1,10 @@
+AVAILABLE HELP TOPICS
+/h		print this list of topics
+/h commands	KRC session commands
+/h syntax	syntax of expressions & scripts
+/h lex		lexical syntax
+/h ops		prefix & infix operators
+/h prelude	the standard prelude
+/h lib1981	legacy prelude from 1981
+/h keys		key bindings used in line editing
+/h CHANGES	system changes by date

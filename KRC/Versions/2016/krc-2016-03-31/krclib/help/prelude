@@ -1,0 +1,371 @@
+||KRC prelude, D. A. Turner March 2016
+||This is a new prelude written for the Unix version of KRC
+
+    abs :- takes the absolute value of a number, e.g. abs (-3) is 3;
+    abs x = x, x >= 0
+          = -x
+
+    all :- applied to a predicate (truth-valued function) and a list
+           returns "TRUE" if the predicate holds for every element;
+    all f = and . map f
+
+    and :- applied to a list of truthvalues, takes the logical conjunction;
+    and = foldr '&' "TRUE"
+
+    any :- applied to a predicate and a list returns "TRUE" if the 
+           predicate is "TRUE" for at least one element of the list;
+    any f = or . map f
+
+    bool :- predicate, returns "TRUE" on the strings "TRUE" and "FALSE",
+            "FALSE" on other values;
+    bool x = x=="TRUE" | x=="FALSE"
+
+    char :- predicate, true on strings of size one, false otherwise
+            (defined in machine code);
+    char = char__
+
+    chr :- `chr n' is ascii character number n, e.g. chr 10 == "\n"
+            (defined in machine code);
+    chr = chr__
+
+    cjustify :- applied to a number and a string, centre justifies the
+                string in a field of the specified width;
+    cjustify n x = cjustify' (n - printwidth x) x
+
+    cjustify' :- used by cjustify;
+    cjustify' n x = [spaces (n / 2),x,spaces ((n + 1) / 2)]
+
+    curry :- converts a function that expects a 2-list into a function
+             that takes its arguments one at a time;
+    curry f a b = curry f [a,b]
+
+    curry_ :- generic, converts a function expecting an n-list into the
+              corresponding n-ary function. Example: curry = curry_ 2.
+              Unlike generic uncurry, curry_ needs to be given n;
+    curry_ 0 f = f []
+    curry_ n f = curry' (n-1) f
+    curry_' n f a = curry_ n (f . (':' a))
+
+    ord :- converts a character to its ascii number, e.g. ord "\n" == 10
+            (defined in machine code);
+    ord = ord__
+
+    concat :- applied to a list of lists, joins them into a single list
+              with `++', e.g.
+                  concat [[1,2],[3,4]] = [1,2,3,4];
+    concat = foldr '++' []
+
+    const :- creates constant functions, e.g (const 3) is a function that
+             always returns 3;
+    const a b = a
+
+    digit :- predicate, true on single digit strings;
+    digit x = char x & "0" <= x <= "9"
+
+    digitval :- returns the numeric value of a digit;
+    digitval x = ord x - ord "0", digit x
+
+    drop :- `drop n x' returns list x without its first n elements;
+    drop n x = x, n <= 0
+    drop n [] = []
+    drop n (a:x) = drop (n - 1) x
+
+    dropwhile :- `dropwhile f x' removes elements from the front of list x
+                 for which function f returns "TRUE";
+    dropwhile f [] = []
+    dropwhile f (a:x) = dropwhile f x, f a
+                      = a:x
+
+    even :- predicate, true on even numbers;
+    even n = n % 2 == 0
+
+    error :- applied to a printable value, terminates the program and
+             prints the value with (!) on stderr.
+            (defined in machine code);
+    error = abort__
+
+    explode :- explodes a string into a list of characters
+            (defined in machine code);
+    explode = explode__
+
+    filter :- applied to a predicate and a list returns a list of the
+              elements for which the predicate takes value "TRUE";
+    filter f x = {a|a<-x;f a}
+
+    flip :- converts a two-argument function into one that takes its
+            arguments in the opposite order;
+    flip f a b = f b a
+
+    foldl :- folds up a list using a given binary operator and start
+             value in a left associative way.  Example:
+                 foldl op r [a,b,c] = op c (op b (op a r))
+             In order to run in constant space, foldl evaluates
+             the accumulating result at each stage;
+    foldl op s [] = s
+    foldl op s (a:x) = strict (foldl op) (op a s) x
+
+    foldr :- folds up a list using a given binary operator and start
+             value in a right associative way.  Example:
+                 foldr op r [a,b,c] = op a (op b (op c r));
+    foldr op s [] = s
+    foldr op s (a:x) = op a (foldr op s x)
+
+    function :- type testing predicate
+            (defined in machine code);
+    function = function__
+
+    hd :- applied to a non empty list, returns its first element;
+    hd (a:x) = a
+
+    id :- is the identity function, applied to any object it returns it;
+    id a = a
+
+    implode :- takes a list of strings and joins them together to make a
+               single string - the opposite of explode
+            (defined in machine code);
+    implode = implode__
+
+    init :- applied to a non-empty list returns the list without its last
+            element;
+    init [a] = []
+    init (a:x) = a : init x
+
+    interleave :- merges two lists into one by taking members from them
+                  alternately;
+    interleave (a:x) y = a:interleave y x
+    interleave [] y = y
+
+    intersect :- returns a list of the common elements of two lists;
+    intersect x y = filter (member x) y
+
+    iterate :- (iterate f x) is the infinite list [x,f x,f(f x), ... ];
+    iterate f x = x : iterate f (f x)
+
+    last :- applied to a non-empty list returns its last element;
+    last x = x (#x-1)
+
+    lay :- applied to a list formats it to have one element per line when
+           printed with !;
+    lay [] = []
+    lay (a:x) = show a:"\n":lay x
+
+    layn :- similar to `lay', but produces output with numbered lines;
+    layn x = layn' 1 x
+
+    layn' :- (layn' n x) formats list x one element per line with lines
+             numbered starting at n;
+    layn' n [] = []
+    layn' n (a:x) = rjustify 4 n:")  ":show a:nl:layn' (n + 1) x
+
+    letter :- predicate, true on single letter strings;
+    letter x = uppercase x | lowercase x
+
+    limit :- finds the fixed point, if any, of a function repeatedly applied
+             to an initial value;
+    limit f x = limit f (f x), f x \= x
+              = x
+
+    list :- type testing predicate
+            (defined in machine code);
+    list = list__
+
+    listdiff :- defines the action of the "--" operator;
+    listdiff [] y = []
+    listdiff x [] = x
+    listdiff (a:x) (b:y) = listdiff x y, a == b
+                         = listdiff (a:listdiff x [b]) y
+
+    ljustify :- applied to a number and a string, left justifies the string
+                in a field of the specified width;
+    ljustify n x = [x,spaces (n - printwidth x)]
+
+    lowercase :- predicate, true on lowercase letters;
+    lowercase x = char x & ord "a" <= ord x <= ord "z"
+
+    map :- applied to a function and a list returns the list obtained by
+           applying the function to each element;
+    map f x = {f a|a<-x}
+
+    max :- returns the greater of two numbers or two strings under '>=';
+    max a b = a, a>=b
+            = b
+
+    maximum :- of a list of numbers or strings returns the greatest;
+    maximum (a:x) = foldl max a x
+
+    member :- applied to a list and a value returns "TRUE" or "FALSE" as the
+              value is or not present in the list;
+    member [] a = "FALSE"
+    member (a:x) b = a == b | member x b
+
+    merge :- of two ordered lists merges them to a single ordered list;
+    merge x [] = x
+    merge [] y = y
+    merge (a:x) (b:y) = a:merge x (b:y), a <= b
+                      = b:merge (a:x) y
+
+    min :- returns the lesser of two numbers or two strings under '<=';
+    min a b = a, a<=b
+            = b
+
+    minimum :- of a list of numbers or strings returns the least;
+    minimum (a:x) = foldl min a x
+
+    mkset :- removes duplicate elements from a list, takes time quadratic in
+             the length of the list;
+    mkset x = mkset' x []
+
+    mkset' :- used by mkset;
+    mkset' [] y = []
+    mkset' (a:x) y = mkset' x y, member y a
+                   = a:mkset' x (a:y)
+
+    neg :- a function with same action as unary `-';
+    neg x = -x
+
+    nl :- newline;
+    nl = chr 10
+
+    np :- newpage;
+    np = chr 12
+
+    number :- type testing predicate
+            (defined in machine code);
+    number = number__
+
+    odd :- predicate, true on odd numbers;
+    odd n = \even n
+
+    or :- applied to a list of truthvalues, takes their logical disjunction;
+    or = foldr '|' "FALSE"
+
+    printwidth :- for any value returns its width on printing with "!",
+                  width meaning number of characters
+            (defined in machine code);
+    printwidth = printwidth__
+
+    product :- applied to list of numbers returns their product;
+    product = foldl '*' 1
+
+    quote :- quotation mark;
+    quote = chr 34
+
+    read :- takes a file or device name and returns a list of characters
+            (defined in machine code);
+    read = read__
+
+    reverse :- applied to a list returns a list of the same elements in
+               reverse order;
+    reverse = foldl ':' []
+
+    rjustify :- applied to a number and a string, right justifies the string
+                in a field of the specified width;
+    rjustify n x = [spaces (n - printwidth x),x]
+
+    seq :- `seq x y' evaluates x and returns y
+            (defined in machine code);
+    seq = seq__
+
+    show :- applied to any (non-function) value formats it to show its
+            structure when printed with !;
+    show x = x, number x
+           = ["\"",map showchar (explode x),"\""], string x
+    show [] = "[]"
+    show (a:x) = ["[",show a,{[",",show b]|b<-x},"]"]
+
+    showchar :- part of the workings of `show', for use on strings;
+    showchar c = c, 32 <= ord c < 127
+    showchar "\a" = "\\a"
+    showchar "\b" = "\\b"
+    showchar "\f" = "\\f"
+    showchar "\n" = "\\n"
+    showchar "\r" = "\\r"
+    showchar "\v" = "\\v"
+    showchar "\\" = "\\\\"
+    showchar "\"" = "\\\""
+    showchar c = ["\\",ord c]
+
+    sort :- of a list of numbers or strings returns an ordered list of the
+            same elements. This version of merge-sort is due to Ian Lynagh;
+    sort = sort' . map (flip ':' [])
+
+    sort' :- used by sort;
+    sort' [] = []
+    sort' [x] = x
+    sort' xs = sort' (sort'' xs)
+
+    sort'' :- used by sort, Ian Lynagh calls this function merge_pairs;
+    sort'' [] = []
+    sort'' [x] = [x]
+    sort'' (x:y:xs) = merge x y : sort'' xs
+
+    spaces :- applied to a number returns a list of that many spaces;
+    spaces 0 = []
+    spaces n = " ":spaces (n - 1)
+
+    strict :- applied to a function returns a version of the function that
+              always evaluates its argument;
+    strict f x = seq x (f x)
+
+    string :- type testing predicate
+            (defined in machine code);
+    string = string__
+
+    sum :- applied to list of numbers returns their sum;
+    sum = foldl '+' 0
+
+    tab :- horizontal tab;
+    tab = chr 9
+
+    take :- `take n x' returns a list of the first n elements of list x;
+    take n x = [], n <= 0
+    take n [] = []
+    take n (a:x) = a : take (n - 1) x
+
+    takewhile :- `takewhile f x' takes elements from the front of list x for
+                 which function f returns "TRUE";
+    takewhile f [] = []
+    takewhile f (a:x) = a : takewhile f x, f a
+                      = []
+
+    tl :- applied to a non-empty list returns the list without its first
+          element;
+    tl (a:x) = x
+
+    uncurry :- generic uncurry, converts an n-ary function into a
+               function that takes its arguments as an n-list;
+    uncurry f [] = f
+    uncurry f (a:x) = uncurry (f a) x
+
+    union :- returns a merger of two lists with duplicates removed;
+    union x y = mkset (interleave x y)
+
+    uppercase :- predicate, true on uppercase letters;
+    uppercase x = char x & ord "A" <= ord x <= ord "Z"
+
+    vt :- vertical tab;
+    vt = chr 11
+
+    write :- used to mark items to be sent to a file on output with !
+                 write "filename" x
+             where x is any KRC data item.
+            (defined in machine code);
+    write = write__
+
+    zip :- applied to a list of lists, returns the matrix transpose 
+           i.e. rows and columns are interchanged.  Example
+               zip [[1,2,3],[4,5,6]] = [[1,4],[2,5],[3,6]]
+           also accepts upper triangular matrices, e.g.
+               zip [[1,2,3],[4,5],[6]] = [[1,4,6],[2,5],[3]];
+    zip x = zip' (takewhile ('\=' []) x)
+
+    zip' :- used by zip;
+    zip' x = [], x==[]
+           = map hd x : zip (map tl x)
+
+    zipwith :- applies an n-ary function to each row of a matrix with
+               n columns. Taking a 3-ary function f as example
+               zipwith f [x,y,z]
+               = [f (x 0) (y 0) (z 0), f (x 1) (y 1) (z 1), ... ];
+                  
+    zipwith f xss = map (uncurry f) (zip xss)

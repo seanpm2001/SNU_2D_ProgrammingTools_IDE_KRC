@@ -1,0 +1,28 @@
+Compiling and installing KRC
+----------------------------
+
+Tested on Debian/Ubuntu Linux, 32-bit and 64-bit
+
+	make
+	sudo make install
+
+Installation directories for the executable, the files it requires
+and man pages can be changed by editing the Makefile (near the top)
+or by saying
+        PREFIX=/usr/local make
+        PREFIX=/usr/local make install
+
+If you just want to try it without installing it, you can
+	make
+	./krc
+and it will find its library files ("prelude", "lib1981" and "help/")
+in local directory `krclib'
+
+note also directory `doc' with man pages krc.1
+
+krc has been tested with gcc, clang and tcc compilers.
+Of the three, clang gives best performance, not in terms of speed
+but because it leaves less (apparently no!) junk on the stack
+whereas the other two do, tcc more than gcc, and that junk makes
+the garbage collector uselessly preserve unused cells on the heap.
+To use clang:  CC=clang make

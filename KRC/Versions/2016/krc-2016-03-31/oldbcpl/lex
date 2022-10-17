@@ -1,0 +1,177 @@
+GET "LIBHDR"
+GET "KRC_LISTHDR"
+GET "KRC_COMPHDR"
+
+|| KRC LEX ANALYSER
+
+||----------------------------------------------------------------------
+||The KRC system is Copyright (c) D. A. Turner 1981
+||All  rights reserved.  It is distributed as free software under the
+||terms in the file "COPYING", which is included in the distribution.
+||----------------------------------------------------------------------
+
+STATIC $( EXPECTFILE=FALSE $)
+
+LET READLINE()   || READS THE NEXT LINE INTO "TOKENS"
+BE $( LET P = @TOKENS
+      LET T = 0
+      TOKENS:= NIL
+      THE.DECIMALS:=0
+      ERRORFLAG:=FALSE
+      EXPFLAG:= FALSE  || WILL GET SET IF THE LINE CONTAINS "?" OR "!"
+      COMMENTFLAG:= FALSE
+      EXPECTFILE:= FALSE
+      EQNFLAG:=FALSE  ||WILL GET SET IF THE LINE CONTAINS "="
+      T,!P,P := READTOKEN(),CONS(T,NIL),@TL!(!P)
+           REPEATUNTIL T=EOL | T=ENDSTREAMCH | T=BADTOKEN
+      IF HD!TOKENS=EOL LOOP ||IGNORE BLANK LINES
+      IF T=ENDSTREAMCH & INPUT()=SYSIN
+      DO $( ENDREAD() ; SELECTINPUT(SYSIN)  $)
+      ||AN EMAS KLUDGE - IN CASE USER HITS EOT CHAR ON TERMINAL
+      IF T=EOL | T=ENDSTREAMCH RETURN
+      WRITES("Closing quote missing - line ignored*N")
+   $) REPEAT
+
+AND READTOKEN() = VALOF
+|| TOKEN ::= CHAR | <CERTAIN DIGRAPHS, REPRESENTED BY NOS ABOVE 256> |
+||          | CONS(ID,ATOM) | CONS(CONST,<ATOM|NUM>)
+$( LET CH = RDCH()
+   WHILE CH=' '|CH='*T' DO CH:= RDCH()
+   IF CH='*N' RESULTIS EOL
+   IF 'a'<=CH<='z'|'A'<=CH<='Z'|EXPECTFILE & ('0'<=CH<='9'|CH='.'|CH='#')
+   DO $( $( BUFCH(UPPERCASE->CASECONV(CH),CH) 
+            CH:=RDCH()
+         $) REPEATWHILE 'a'<=CH<='z'|'A'<=CH<='Z'|'0'<=CH<='9'|CH='*''|CH='_'|EXPECTFILE &(CH='.'|CH='#')
+         UNRDCH()
+      $( LET X = PACKBUFFER()
+         IF TOKENS\=NIL & HD!TOKENS='/' & TL!TOKENS=NIL & MEMBER(FILECOMMANDS,X)
+         DO EXPECTFILE:= TRUE
+         RESULTIS CONS(ID,X)  $) $)
+   IF '0'<=CH<='9' | CH='.'&TOKENS=NIL&PEEKDIGIT()
+   DO $( TEST CH='.'
+         THEN $( THE.NUM:=0
+                 TERMINATOR:='.'  $)
+         OR $( UNRDCH() ; THE.NUM:= READN()  $)
+         TEST TOKENS=NIL & TERMINATOR='.'  ||LINE NUMBERS (ONLY) ARE
+         THEN THE.DECIMALS:=READ.DECIMALS()||ALLOWED A DECIMAL PART
+         OR UNRDCH()
+         RESULTIS CONS(CONST,STONUM(THE.NUM)) $)
+   IF CH='*"'
+   DO $( LET A = NIL
+         CH:= RDCH()
+         UNTIL CH='*"'|CH='*N'
+         DO $( BUFCH(CH) ; CH:=RDCH()  $)
+         A:= PACKBUFFER()
+         RESULTIS CH='*N' -> BADTOKEN, CONS(CONST,A)  $)
+$( LET CH2 = RDCH()
+   IF CH=':' & CH2='-' & TOKENS\=NIL & ISCONS(HD!TOKENS) &
+      HD!(HD!TOKENS)=ID & TL!TOKENS=NIL
+   DO $( LET C = NIL
+         COMMENTFLAG:= TRUE
+         SUPPRESSPROMPTS()
+         CH:= RDCH()
+         IF CH=';' RESULTIS NIL
+         UNTIL CH=';' | CH=ENDSTREAMCH
+         DO TEST CH='*N'
+            THEN $( C:= CONS(PACKBUFFER(),C)
+                    CH:= RDCH() REPEATWHILE CH='*N'
+                              ||IGNORE BLANK LINES IN COMMENT ALSO
+                 $)
+            OR $( BUFCH(CH) ; CH:= RDCH()  $)
+         C:= CONS(PACKBUFFER(),C)
+         RESULTIS REVERSE(C) $)
+   IF CH='+'=CH2 RESULTIS PLUSPLUS.SY
+   IF CH='.'=CH2 RESULTIS DOTDOT.SY
+   IF CH='<' & CH2='-' RESULTIS BACKARROW.SY
+   IF CH='-'=CH2 RESULTIS DASHDASH.SY
+   IF CH='**'=CH2 RESULTIS STARSTAR.SY
+   IF CH2='='
+   DO $( IF CH='>' RESULTIS GE.SY
+         IF CH='<' RESULTIS LE.SY
+         IF NOTCH(CH) RESULTIS NE.SY 
+      $)
+   UNRDCH()
+   IF CH='?'|CH='!' DO EXPFLAG:= TRUE
+   IF CH='=' DO EQNFLAG:=TRUE
+   RESULTIS NOTCH(CH)-> '\', CH
+$) $)
+
+AND CASECONV(CH) =
+   'A'<=CH<='Z' -> CH+'a'-'A',
+      CH
+
+AND NOTCH(CH) = CH='~'|CH='\'
+
+AND PEEKDIGIT() = VALOF
+$( LET CH=RDCH()
+   UNRDCH()
+   TEST '0'<=CH<='9'
+   THEN RESULTIS TRUE
+   ELSE RESULTIS FALSE  $)
+
+AND READ.DECIMALS() = VALOF ||RETURNS VALUE IN HUNDREDTHS
+$( LET N,F,D = 0,10,?
+   $( D:=RDCH()-'0'
+      UNLESS 0<=D<=9
+      DO $( D:=D+'0'
+            WHILE D=' ' DO D:=RDCH()
+            UNLESS D=')' DO SYNTAX()
+            UNRDCH()
+            RESULTIS N  $)
+      N:=N+F*D ||NOTE THAT DECIMAL PLACES AFTER THE 2ND WILL HAVE NO
+      F:=F/10  ||EFFECT ON THE ANSWER
+   $) REPEAT
+$)
+
+AND WRITETOKEN(T)
+BE TEST T<256 THEN WRCH(T) OR
+   SWITCHON T INTO
+$( CASE PLUSPLUS.SY: WRITES("++"); ENDCASE
+   CASE DASHDASH.SY: WRITES("--"); ENDCASE
+   CASE STARSTAR.SY: WRITES("****"); ENDCASE
+   CASE GE.SY: WRITES(">="); ENDCASE
+   CASE LE.SY: WRITES("<="); ENDCASE
+   CASE NE.SY: WRITES("\="); ENDCASE
+   CASE BACKARROW.SY: WRITES("<-"); ENDCASE
+   CASE DOTDOT.SY: WRITES(".."); ENDCASE
+   DEFAULT: TEST \(ISCONS(T) & (HD!T=ID | HD!T=CONST))
+            THEN WRITES("<UNKNOWN TOKEN<%N>>",T) OR
+            TEST HD!T=ID
+            THEN WRITES(PRINTNAME(ISCONS(TL!T)&HD!(TL!T)=ALPHA->
+                                               TL!(TL!T), TL!T)) OR
+            TEST ISNUM(TL!T)
+            THEN WRITEN(GETNUM(TL!T))
+            OR WRITEF("*"%S*"",PRINTNAME(TL!T))
+$)
+
+AND HAVE(T) = VALOF
+$( IF TOKENS=NIL | HD!TOKENS\=T RESULTIS FALSE
+   TOKENS:= TL!TOKENS
+   RESULTIS TRUE $)
+
+AND CHECK(T)
+BE UNLESS HAVE(T) DO ERRORFLAG:= TRUE
+
+AND SYNTAX()
+BE ERRORFLAG:=TRUE
+
+AND HAVEID() = VALOF
+$( UNLESS ISCONS(HD!TOKENS) & HD!(HD!TOKENS)=ID RESULTIS FALSE
+   THE.ID:= TL!(HD!TOKENS)
+   TOKENS:= TL!TOKENS
+   RESULTIS TRUE $)
+
+AND HAVECONST() = VALOF
+$( UNLESS ISCONS(HD!TOKENS) & HD!(HD!TOKENS)=CONST RESULTIS FALSE
+   THE.CONST:= TL!(HD!TOKENS)
+   TOKENS:= TL!TOKENS
+   RESULTIS TRUE $)
+
+AND HAVENUM() = VALOF
+$( UNLESS ISCONS(HD!TOKENS) & HD!(HD!TOKENS)=CONST &
+          ISNUM(TL!(HD!TOKENS)) RESULTIS FALSE
+   THE.NUM:= GETNUM(TL!(HD!TOKENS))
+   TOKENS:= TL!TOKENS
+   RESULTIS TRUE  $)
+
+

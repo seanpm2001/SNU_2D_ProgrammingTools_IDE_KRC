@@ -1,0 +1,6 @@
+    foo :- demonstrates one kind of non-terminating recursion, say
+           r?
+           to get a stack overflow during reduction;
+    foo (a:b:x) = a:foo (b:x)
+
+    r = foo (1:r)

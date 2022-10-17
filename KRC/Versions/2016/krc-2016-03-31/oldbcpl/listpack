@@ -1,0 +1,295 @@
+|| LIST PROCESSING PACKAGE (FOR 2960/EMAS)    DAT 23/11/79
+|| WARNING - MUCH OF THIS CODE IS MACHINE DEPENDENT
+GET "LIBHDR"
+GET "KRC_LISTHDR"
+
+||----------------------------------------------------------------------
+||The KRC system is Copyright (c) D. A. Turner 1981
+||All  rights reserved.  It is distributed as free software under the
+||terms in the file "COPYING", which is included in the distribution.
+||----------------------------------------------------------------------
+
+STATIC $( SPACE=20000    ||SPACE IS THE NUMBER OF LIST CELLS IN EACH
+                         ||SEMI-SPACE.  ON 2960/EMAS MUST BE <=128K
+       $)
+MANIFEST $( ATOMSPACE=8000 ||NUMBER OF WORDS AVAILABLE TO STORE ATOMS
+            ATOMSIZE=255   ||MAX NO OF CHARS IN AN ATOM
+            FULLWORD=NIL+1 ||THE TOP 2 BITS ARE NOT USED IN BCPL 
+            GONETO=NIL+2   ||ADDRESSES ON THIS SYSTEM.  THE VALUE OF NIL
+                           ||IS THE 2ND LEFTMOST BIT ON ITS OWN - VALUES
+                           ||FROM HERE UP AN SAFELY BE USED AS FLAGS ETC
+           BIGSPACE=100000
+           LINK=0;OFFSET=2
+          $)
+
+STATIC $( CONSBASE=?; CONSLIMIT=?; CONSP=?; OTHERBASE=?; STACKBASE=?
+          BUFFER=?; BUFP=0; HASHV=?; ATOMBASE=?; ATOMP=?; ATOMLIMIT=?
+          NOGCS=0; RECLAIMS=0
+       $)
+
+LET START()
+BE $( IF HAVEPARAM('B')
+      DO $( SPACE:=BIGSPACE  ||PARAMETER "B" FOR "BIG"
+            WRITEF("(%N cells)*N",SPACE)  $)
+      APTOVEC(START1,2*SPACE-1)
+   $)
+|| TAKING ADVANTAGE OF THE FACT THAT WE HAVE VIRTUAL MEMORY, WE SET UP
+|| TWO COPIES OF LIST SPACE IN ORDER TO BE ABLE TO DO GARBAGE COLLECTION
+|| BY DOING A GRAPH COPY FROM ONE SPACE TO THE OTHER
+
+AND START1(V,N)
+BE $( CONSBASE,CONSP,CONSLIMIT:= V,V,V+N+1
+      APTOVEC(START2,2*SPACE-1)  $)
+
+AND START2(V,N)
+BE $( LET V1=VEC ATOMSIZE
+      LET V2=VEC 127  || WE HAVE 128-WAY HASHING OF ATOMS
+      OTHERBASE,BUFFER,HASHV:= V,V1,V2
+      FOR I= 0 TO 127 DO HASHV!I:= 0
+      APTOVEC(START3,ATOMSPACE-1)  $)
+
+AND START3(V,N)
+BE $( ATOMBASE,ATOMP,ATOMLIMIT:= V,V+1,V+N+1
+      STACKBASE:= 1+@N
+      ATGC:= FALSE
+      GO()   $)    ||"GO" IS THE USER'S START ROUTINE
+
+AND HAVEPARAM(CH) = VALOF
+$( FOR I = 1 TO GETBYTE(PARAM,0)
+    IF GETBYTE(PARAM,I)=CH RESULTIS TRUE
+   RESULTIS FALSE  $)
+
+AND CONS(X,Y)=VALOF
+$( IF CONSP=CONSLIMIT
+   DO $( GC()
+         IF (CONSP-CONSBASE)/2 > (9*SPACE)/10  ||ABANDON JOB IF SPACE
+         DO SPACE.ERROR()            ||UTILISATION EXCEEDS 90%
+      $)
+   HD!CONSP,TL!CONSP,CONSP:= X,Y,CONSP+2
+   RESULTIS CONSP-2  $)
+
+AND GC() || GARBAGE COLLECTOR - DOES A GRAPH COPY INTO THE OTHER  SEMI-SPACE
+BE $( HOLD.INTERRUPTS()
+      NOGCS:= NOGCS+1
+      IF ATGC DO WRITES("<gc called>*N")
+      IF SPACE=BIGSPACE
+      DO $( EXTERNAL $( DSETIC  $)
+            MANIFEST $( SECONDS=3600  $)
+            DSETIC(SECONDS*290)  ||OVERRIDE EMAS TIME LIMIT
+         $)
+      CONSP:= OTHERBASE
+      BASES(COPY)    || USER'S STATIC VARIABLES ETC.
+      FOR I= 0 TO 127
+      DO $( LET P = HASHV!I         || VAL FIELDS OF ATOMS
+            UNTIL P=0
+            DO $( COPY(@P!VAL)
+                  P:= P!LINK  $)
+         $)
+      FOR P= STACKBASE TO @P
+      DO IF(!P-CONSBASE)REM 2 = 0 DO COPY(P)    || THE BCPL STACK
+         ||(ONLY EVEN ADDRESSES IN LISTSPACE COUNT)
+
+      COPYHEADS()
+      || NOW SWAP SEMI-SPACES
+      $( LET HOLD=CONSBASE
+         CONSBASE,CONSLIMIT,OTHERBASE:= OTHERBASE,OTHERBASE+2*SPACE,HOLD
+      $)
+      RECLAIMS:= RECLAIMS + (CONSLIMIT-CONSP)/2
+      IF ATGC DO WRITEF("<%N cells in use>*N",(CONSP-CONSBASE)/2)
+      RELEASE.INTERRUPTS()
+   $)
+
+AND COPY(P)  || P IS THE ADDRESS OF A LIST FIELD
+BE
+||   DO $( WRITES("COPYING ")
+||         PRINTOB(!P)
+||         NEWLINE()  $) <>
+   WHILE CONSBASE<=!P<CONSLIMIT
+   DO $( IF HD!(!P)=GONETO
+         DO $( !P:= TL!(!P)
+               RETURN $)
+      $( LET X,Y,Z = HD!(!P),TL!(!P),CONSP
+         HD!(!P):= GONETO
+         TL!(!P):= Z
+         !P:=Z
+         HD!Z,TL!Z:= X,Y
+         CONSP:= CONSP+2
+         IF X=FULLWORD DO RETURN
+         P:= @TL!Z  $) $)
+
+AND COPYHEADS()
+BE $( LET Z = OTHERBASE
+      UNTIL Z = CONSP
+      DO $( COPY(@HD!Z)
+            Z:= Z+2   $)
+   $)
+
+AND ISCONS(X)= CONSBASE<=X<CONSLIMIT-> HD!X\=FULLWORD,FALSE
+
+AND ISATOM(X) = ATOMBASE<=X<ATOMP
+
+AND ISNUM(X) = CONSBASE<=X<CONSLIMIT -> HD!X=FULLWORD,FALSE
+
+AND STONUM(N) = CONS(FULLWORD,N)
+
+AND GETNUM(X) = TL!X
+
+AND MKATOM(S) = VALOF
+$( LET BUCKET = @ HASHV!HASH(S)
+   LET P = BUCKET
+   LET N = S!0 >> 26
+   UNTIL !P=0     || SEARCH THE APPROPRIATE BUCKET
+   DO $( LET S1 = !P + OFFSET
+         LET I = 0
+         UNTIL I>N | S!I\=S1!I DO I:= I+1
+         IF I>N RESULTIS !P
+         P:= @(!P)!LINK  $)
+   ||CREATE NEW ATOM
+   IF ATOMP+OFFSET+N >= ATOMLIMIT
+   DO $( WRITES("<string space exhausted>*N")
+         FINISH $)
+   !P,ATOMP!LINK,ATOMP!VAL:= ATOMP,0,NIL
+   ATOMP:= ATOMP+OFFSET
+   FOR I=0 TO N DO ATOMP!I:= S!I
+   ATOMP:= ATOMP+N+1
+   RESULTIS !P
+$)
+
+AND HASH(S)= VALOF  || TAKES A STRING AND RETURNS A VALUE IN 0..127
+$( LET H=S!0
+   LET W=H>>8
+   H:=H+W
+   W:=W>>8
+   H:=H+W
+   W:=(W>>8)*37
+   RESULTIS (H+W)&#X7F $)
+
+AND PRINTNAME(X) =  X+OFFSET
+
+AND BUFCH(CH)
+BE $( BUFP:= BUFP+1
+      IF BUFP>ATOMSIZE
+      DO $( WRITES("Atom too big*N(Atom = *"")
+            FOR I=1 TO BUFP-1 DO WRCH(BUFFER!I)
+            WRITES("...*")*N")
+            BUFP:=0
+            SPACE.ERROR() $)
+      BUFFER!BUFP:= CH $)
+
+AND PACKBUFFER() = VALOF
+$( LET V= VEC ATOMSIZE
+   BUFFER!0,BUFP:= BUFP,0
+   PACKSTRING(BUFFER,V)
+   RESULTIS MKATOM(V)  $)
+
+AND ALFA.LS(A,B) = VALOF  || A,B ARE ATOMS
+$( A,B:= A+OFFSET,B+OFFSET
+$( LET MASK = #X20202020  ||MASKS OUT ALL THE CASE BITS
+L:
+$( LET A1,B1 = (A!0<<8)|MASK,(B!0<<8)|MASK
+   IF A1<B1 RESULTIS TRUE
+   IF A1>B1 RESULTIS FALSE
+$( LET N1,N2 = A!0>>24,B!0>>24
+   LET N = N1<=N2 ->N1>>2, N2>>2
+   FOR I=1 TO N
+   DO $( IF (A!I|MASK)=(B!I|MASK) LOOP
+         RESULTIS (A!I|MASK) < (B!I|MASK)  $)
+   IF N1=N2 & MASK DO $( MASK:=0 ; GOTO L  $)
+      ||BILL MUDD WROTE THIS PIECE OF CODE - I HAD NOTHING TO DO WITH IT - DT
+   RESULTIS N1<N2
+$) $) $) $)
+
+AND GCSTATS()
+BE WRITEF("Cells claimed = %N, no of gc's = %N",
+          RECLAIMS+(CONSP-CONSBASE)/2, NOGCS)
+
+AND RESETGCSTATS()
+BE NOGCS, RECLAIMS:= 0, -(CONSP-CONSBASE)/2
+
+AND FORCE.GC()
+BE $( RECLAIMS:=RECLAIMS-(CONSLIMIT-CONSP)/2 ||TO COMPENSATE FOR CALLING
+                                             ||TOO EARLY
+      IF ATGC DO WRITEF("Max cells available = %N*N",SPACE)
+      GC()
+   $)
+
+AND LISTPM()
+BE $( LET EMPTY = 0
+      WRITES("*N LIST POST MORTEM*N")
+      GCSTATS()
+      WRITEF(", current cells = %N*N",(CONSP-CONSBASE)/2)
+      IF BUFP>0
+      DO $( WRITES("Buffer: ")
+            FOR I= 1 TO BUFP DO WRCH(BUFFER!I)
+            NEWLINE() $)
+      WRITES("Atom buckets:*N")
+      FOR I = 0 TO 127
+      DO TEST HASHV!I \= 0
+         THEN $( LET P = HASHV!I
+                 WRITEF("%N :  ",I)
+                 UNTIL P=0
+                 DO $( WRITEF("%S ",P+OFFSET)
+                       UNLESS P!VAL=NIL
+                       DO $( WRITES(" = ")
+                             PRINTOB(P!VAL)
+                             WRITES("*N       ")  $)
+                       P:= P!LINK $)
+                 NEWLINE() $)
+         OR EMPTY:= EMPTY + 1
+      WRITEF("Empty buckets = %N*N",EMPTY)  $)
+
+AND LENGTH(X) = VALOF
+$( LET N = 0
+   UNTIL X=NIL
+   DO X,N:= TL!X,N+1
+   RESULTIS N  $)
+
+AND MEMBER(X,A) = VALOF
+$( UNTIL X=NIL | HD!X=A
+   DO X:= TL!X
+   RESULTIS X\=NIL  $)
+
+AND APPEND(X,Y) = SHUNT(SHUNT(X,NIL),Y)
+
+AND REVERSE(X) = SHUNT(X,NIL)
+
+AND SHUNT(X,Y) = VALOF
+$( UNTIL X=NIL
+   DO $( Y:=CONS(HD!X,Y)
+         X:=TL!X  $)
+   RESULTIS Y  $)
+
+AND SUB1(X,A) =  ||DESTRUCTIVELY REMOVES A FROM X (IF PRESENT)
+    X=NIL -> NIL,
+    HD!X=A -> TL!X, VALOF
+$( LET P = @TL!X
+   UNTIL !P=NIL | HD!(!P)=A DO P:= @TL!(!P)
+   UNLESS !P=NIL DO !P:= TL!(!P)
+   RESULTIS X  $)
+
+AND EQUAL(X,Y) = VALOF
+$( IF X=Y RESULTIS TRUE
+   IF ISNUM(X) & ISNUM(Y)
+   RESULTIS GETNUM(X)=GETNUM(Y)
+   UNLESS ISCONS(X)&ISCONS(Y)&EQUAL(HD!X,HD!Y)
+   RESULTIS FALSE
+   X,Y := TL!X,TL!Y  $) REPEAT
+
+AND ELEM(X,N) = VALOF
+$( UNTIL N=1 DO X,N:=TL!X,N-1
+   RESULTIS HD!X  $)
+
+AND PRINTOB(X)
+BE TEST X=NIL THEN WRITES("NIL") OR
+   TEST ISATOM(X) THEN WRITEF("*"%S*"",PRINTNAME(X)) OR
+   TEST ISNUM(X) THEN WRITEN(GETNUM(X)) OR
+   TEST ISCONS(X)
+   THEN $( WRCH('(')
+           WHILE ISCONS(X)
+           DO $( PRINTOB(HD!X)
+                 WRCH('.')
+                 X:=TL!X  $)
+           PRINTOB(X)
+           WRCH(')')  $)
+   OR WRITEF("<%N>",X)
+

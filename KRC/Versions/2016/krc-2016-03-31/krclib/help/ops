@@ -1,0 +1,12 @@
+ KRC OPERATORS - IN ORDER OF INCREASING BINDING POWER
+
+:  ++  --               right assoc               cons, append, listdiff
+|                       right assoc               logical or
+&                       right assoc               logical and
+\                       prefix                    not
+>  >=  ==  \=  <=  <    continued relations OK    comparisons
++  -                    left assoc                plus, minus
+-                       prefix                    neg
+*  /  %                 left assoc                mult, div, remainder
+**  .                   right assoc               power, fn-compose
+#                       prefix                    length-of-list

@@ -1,0 +1,15 @@
+    soln :- soln! prints all solns to the 8 queens problem
+            This is the version from the original paper in the
+            book published by Cambridge University Press in 1982.
+            It requires krc -z because it assumes lists
+            indexed from 1 rather than 0;
+    soln = layn (queens 8), version_check
+
+    queens 0 = [[]]
+    queens n = {b ++ [q]|q<-[1..8];b<-queens (n - 1);safe q b}
+
+    safe q b = and {\checks q b i|i<-[1..#b]}
+
+    checks q b i = q == b i | abs (q - b i) == #b - i + 1
+
+    version_check = [0,1] 1 == 0 | error "please use krc -z"

@@ -1,0 +1,19 @@
+    hamming :- The Hamming numbers problem: generate in ascending order
+               all positive integers whose factors are 2, 3 and 5 only.
+               This recursive solution works by merging the output of
+               three streams.  Say
+			ham?
+               to list Hamming numbers until space runs out, or e.g.
+			take 100 ham?
+               to see the first one hundred;
+
+    ham = 1:umerge (mult 2 ham) (umerge (mult 3 ham) (mult 5 ham))
+
+    mult n x = map ('*' n) x
+
+    umerge :- duplicate-removing ordered merge of two ordered lists;
+    umerge (a:x) (b:y) = a:umerge x (b:y), a < b
+                       = b:umerge (a:x) y, b < a
+                       = a:umerge x y
+    umerge x [] = x
+    umerge [] y = y

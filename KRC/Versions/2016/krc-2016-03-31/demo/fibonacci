@@ -1,0 +1,10 @@
+    note :- fib computes the n'th fibonnaci number by naive recursion
+            try: fib 34?
+            fibs is the list of fibonacci method by a faster method
+            try: fibs 34?
+            beware that fibs soon reaches integer overflow;
+            
+    fib n = n, n < 2
+          = fib (n - 1) + fib (n - 2)
+
+    fibs = 0:1:zipwith '+' [fibs,tl fibs]

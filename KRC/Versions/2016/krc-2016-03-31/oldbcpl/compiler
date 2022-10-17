@@ -1,0 +1,634 @@
+||KRC COMPILER
+
+GET "LIBHDR"
+GET "KRC_LISTHDR"
+GET "KRC_COMPHDR"
+
+||----------------------------------------------------------------------
+||The KRC system is Copyright (c) D. A. Turner 1981
+||All  rights reserved.  It is distributed as free software under the
+||terms in the file "COPYING", which is included in the distribution.
+||----------------------------------------------------------------------
+
+STATIC $( INFIXNAMEVEC=?; INFIXPRIOVEC=?
+       $)
+
+LET SETUP.INFIXES()
+BE $( LET V1 = TABLE ':',PLUSPLUS.SY,DASHDASH.SY,'|','&','>',GE.SY,NE.SY,'=',
+                           LE.SY,'<','+','-','**','/','%',STARSTAR.SY,'.'
+      LET V2 = TABLE 0,0,0,1,2,3,3,3,3,3,3,4,4,5,5,5,6,6
+      INFIXNAMEVEC:=V1-1
+      INFIXPRIOVEC:=V2-1
+   $)
+
+AND ISOP(X) = ALPHA<=X<=QUOTE.OP
+
+AND ISINFIX(X) = COLON.OP<=X<= DOT.OP
+
+AND ISRELOP(X) = GR.OP<=X<=LS.OP
+
+AND DIPRIO(OP) = OP=-1-> -1, INFIXPRIOVEC!OP
+
+AND MKINFIX(T) = VALOF   || TAKES A TOKEN , RETURNS AN OPERATOR
+                                 || OR -1 IF T NOT THE NAME OF AN INFIX
+$( LET I = 1
+   UNTIL I>DOT.OP | INFIXNAMEVEC!I=T DO I:= I+1
+   IF I>DOT.OP RESULTIS -1
+   RESULTIS I   $)
+
+AND PRINTEXP(E,N)    || N IS THE PRIORITY LEVEL
+BE TEST E=NIL
+   THEN WRITES("[]") OR
+   TEST ISATOM(E)
+   THEN WRITES(PRINTNAME(E)) OR
+   TEST ISNUM(E)
+   THEN WRITEN(GETNUM(E))
+   OR $( UNLESS ISCONS(E)
+         DO $( TEST E=NOT.OP THEN WRITES("'\'") OR
+               TEST E=LENGTH.OP THEN WRITES("'#'")
+               OR WRITEF("<internal value:%N>",E)
+               RETURN $)
+      $( LET OP=HD!E
+         TEST \ISOP(OP) & N<=7
+         THEN $( PRINTEXP(OP,7)
+                 WRCH(' ')
+                 PRINTEXP(TL!E,8)  $)  OR
+         TEST OP=QUOTE
+         THEN PRINTATOM(TL!E,TRUE) OR
+         TEST OP=INDIR | OP=ALPHA
+         THEN PRINTEXP(TL!E,N) OR
+         TEST OP=DOTDOT.OP | OP=COMMADOTDOT.OP
+         THEN $( WRCH('[')
+                 E:=TL!E
+                 PRINTEXP(HD!E,0)
+                 IF OP=COMMADOTDOT.OP
+                 DO $( WRCH(',')
+                       E:=TL!E
+                       PRINTEXP(HD!E,0)  $)
+                 WRITES("..")
+                 UNLESS TL!E=INFINITY DO PRINTEXP(TL!E,0)
+                 WRCH(']')  $) OR
+         TEST OP=ZF.OP
+         THEN $( WRCH('{')
+                 PRINTZF.EXP(TL!E)
+                 WRCH('}')  $) OR
+         TEST OP=NOT.OP & N<=3
+         THEN $( WRCH('\')
+                 PRINTEXP(TL!E,3) $) OR
+         TEST OP=NEG.OP & N<=5
+         THEN $( WRCH('-')
+                 PRINTEXP(TL!E,5)  $) OR
+         TEST OP=LENGTH.OP & N<=7
+         THEN $( WRCH('#')
+                 PRINTEXP(TL!E,7)  $) OR
+         TEST OP=QUOTE.OP
+         THEN $( WRCH('*'') ; WRITETOKEN(INFIXNAMEVEC!(TL!E)) ; WRCH('*'') $)  OR
+         TEST ISLISTEXP(E)
+         THEN $( WRCH('[')
+                 UNTIL E=NIL
+                 DO $( PRINTEXP(HD!(TL!E),0)
+                       UNLESS TL!(TL!E)=NIL DO WRCH(',')
+                       E:= TL!(TL!E)  $)
+                 WRCH(']')  $) OR
+         TEST OP=AND.OP & N<=3 & ROTATE(E) & ISRELATION(HD!(TL!E)) &
+              ISRELATION.BEGINNING(TL!(TL!(HD!(TL!E))),TL!(TL!E))
+         THEN $( ||CONTINUED RELATIONS
+                 PRINTEXP(HD!(TL!(HD!(TL!E))),4)
+                 WRCH(' ')
+                 WRITETOKEN(INFIXNAMEVEC!(HD!(HD!(TL!E))))
+                 WRCH(' ')
+                 PRINTEXP(TL!(TL!E),2)  $) OR
+         TEST ISINFIX(OP) & INFIXPRIOVEC!OP>=N
+         THEN $( PRINTEXP(HD!(TL!E),LEFTPREC(OP))
+                 UNLESS OP=COLON.OP|OP=DOT.OP DO WRCH(' ')
+                 WRITETOKEN(INFIXNAMEVEC!OP)
+                 UNLESS OP=COLON.OP|OP=DOT.OP DO WRCH(' ')
+                 PRINTEXP(TL!(TL!E),RIGHTPREC(OP))  $)
+          OR $( WRCH('(')
+                PRINTEXP(E,0)
+                WRCH(')')   $)
+      $)  $)
+
+AND PRINTZF.EXP(X)
+BE
+$( LET Y=X
+   UNTIL TL!Y=NIL DO Y:=TL!Y
+   PRINTEXP(HD!Y,0)  ||BODY
+||   TEST ISCONS(HD!X) & HD!(HD!X)=GENERATOR & EQUAL(HD!(TL!(HD!X)),HD!Y)
+||   THEN $( WRITES("<-")  ||IMPLICIT ZF BODY, NO LONGER SUPPORTED - DT OCT 81
+||         PRINTEXP(TL!(TL!(HD!X)),0)
+||         X:= TL!X
+||         WRCH(';')  $) OR
+   ||PRINT "SUCH THAT" AS BAR IFF A GENERATOR DIRECTLY FOLLOWS
+   TEST ISCONS(HD!X) & HD!(HD!X)=GENERATOR THEN WRCH('|') OR WRCH(';')
+   UNTIL TL!X=NIL
+   DO $( LET QUALIFIER=HD!X
+         TEST ISCONS(QUALIFIER) & HD!QUALIFIER=GENERATOR
+         THEN $( PRINTEXP(HD!(TL!QUALIFIER),0)
+                 WHILE ISCONS(TL!X) & ||DEALS WITH REPEATED GENERATORS
+                       HD!(HD!(TL!X))=GENERATOR &
+                       EQUAL(TL!(TL!(HD!(TL!X))),TL!(TL!QUALIFIER))
+                 DO $( X:= TL!X
+                       QUALIFIER:= HD!X
+                       WRCH(',')
+                       PRINTEXP(HD!(TL!QUALIFIER),0) $)
+                 WRITES("<-")
+                 PRINTEXP(TL!(TL!QUALIFIER),0)  $)
+         OR PRINTEXP(QUALIFIER,0)
+         X:=TL!X
+         UNLESS TL!X=NIL DO WRCH(';')  $)
+$)
+
+AND ISLISTEXP(E) = VALOF
+$( WHILE ISCONS(E) & HD!E=COLON.OP
+   DO $( LET E1=TL!(TL!E)
+         WHILE ISCONS(E1) & HD!E1=INDIR
+         DO E1:=TL!E1
+         TL!(TL!E):=E1
+         E:=E1  $)
+   RESULTIS E=NIL   $)
+
+AND ISRELATION(X) = ISCONS(X) & ISRELOP(HD!X) -> TRUE, FALSE
+
+AND ISRELATION.BEGINNING(A,X) =
+    ISRELATION(X) & EQUAL(HD!(TL!X),A) |
+    ISCONS(X) & HD!X=AND.OP &
+      ISRELATION.BEGINNING(A,HD!(TL!X)) -> TRUE, FALSE
+
+AND LEFTPREC(OP) =
+     OP=COLON.OP|OP=APPEND.OP|OP=LISTDIFF.OP|OP=AND.OP|OP=OR.OP|OP=EXP.OP|ISRELOP(OP) ->
+             INFIXPRIOVEC!OP + 1, INFIXPRIOVEC!OP
+
+        || RELOPS ARE NON-ASSOCIATIVE
+        || COLON, APPEND, AND, OR ARE RIGHT-ASSOCIATIVE
+        || ALL OTHER INFIXES ARE LEFT-ASSOCIATIVE
+
+AND RIGHTPREC(OP) =
+       OP =COLON.OP | OP=APPEND.OP | OP=LISTDIFF.OP  | OP=AND.OP | OP=OR.OP | OP=EXP.OP ->
+             INFIXPRIOVEC!OP, INFIXPRIOVEC!OP +1
+
+AND ROTATE(E) ||PUTS NESTED AND'S INTO RIGHTIST FORM TO ENSURE
+  = VALOF     ||DETECTION OF CONTINUED RELATIONS
+$( WHILE ISCONS(HD!(TL!E)) & HD!(HD!(TL!E))=AND.OP
+   DO $( LET X,C = TL!(HD!(TL!E)),TL!(TL!E)
+         LET A,B = HD!X,TL!X
+         HD!(TL!E),TL!(TL!E) := A,CONS(AND.OP,CONS(B,C)) $)
+   RESULTIS TRUE  $)
+
+||DECOMPILER
+
+LET DISPLAY(ID,WITHNOS,DOUBLESPACING)  || THE VAL FIELD OF EACH USER DEFINED NAME
+                || CONTAINS - CONS(CONS(NARGS,COMMENT),<LIST OF EQNS>)
+BE $( IF VAL!ID=NIL
+      DO $( WRITEF("*"%S*" - not defined*N",PRINTNAME(ID))
+            RETURN $)
+   $( LET X,EQNS = HD!(VAL!ID),TL!(VAL!ID)
+      LET NARGS,COMMENT = HD!X,TL!X
+      LET N = LENGTH(EQNS)
+      LASTLHS:=NIL
+      UNLESS COMMENT=NIL
+      DO $( LET C=COMMENT
+            WRITEF("    %S :-",PRINTNAME(ID))
+            UNTIL C=NIL
+            DO $( WRITES(PRINTNAME(HD!C))
+                  C:= TL!C
+                  UNLESS C=NIL 
+                  DO $( NEWLINE()
+                        IF DOUBLESPACING DO NEWLINE() $)
+               $)
+            WRITES(";*N")
+            IF DOUBLESPACING DO NEWLINE()  $)
+      IF COMMENT\=NIL & N=1 & HD!(TL!(HD!EQNS))=CALL.C RETURN
+      FOR I=1 TO N
+      DO $( TEST WITHNOS & (N>1 | COMMENT\=NIL)
+            THEN WRITEF("%I2) ",I)
+            OR WRITES("    ")
+            REMOVELINENO(HD!EQNS)
+            DISPLAYEQN(ID,NARGS,HD!EQNS)
+            IF DOUBLESPACING DO NEWLINE()
+            EQNS:=TL!EQNS  $)
+   $) $)
+
+AND DISPLAYEQN(ID,NARGS,EQN)    ||EQUATION DECODER
+BE $( LET LHS,CODE = HD!EQN,TL!EQN
+      TEST NARGS=0
+      THEN $( WRITES(PRINTNAME(ID)) ; LASTLHS:=ID  $)
+      OR $( TEST EQUAL(LHS,LASTLHS)
+            THEN WRCH:=SHCH
+            OR LASTLHS:=LHS
+            PRINTEXP(LHS,0)
+            WRCH:=TRUEWRCH  $)
+      WRITES(" = ")
+      TEST HD!CODE=CALL.C THEN WRITES("<primitive function>")
+      OR DISPLAYRHS(LHS,NARGS,CODE)
+      NEWLINE()
+   $)
+
+AND SHCH(CH)
+BE TRUEWRCH(' ')
+
+||AND DECODE.EXP(CODE)
+||BE DISPLAYRHS(NIL,0,CODE)
+
+AND DISPLAYRHS(LHS,NARGS,CODE)
+BE $( LET V = VEC 100
+      LET I,IF.FLAG = NARGS,FALSE
+      WHILE I>0 ||UNPACK FORMAL PARAMETERS INTO V
+      DO $( I:= I-1
+            V!I:= TL!LHS
+            LHS:= HD!LHS $)
+      I:= NARGS-1
+      $( SWITCHON HD!CODE INTO
+      $( CASE LOAD.C: CODE:=TL!CODE
+                      I:=I+1
+                      V!I:=HD!CODE
+                      ENDCASE
+         CASE LOADARG.C: CODE:=TL!CODE
+                         I:=I+1
+                         V!I:=V!(HD!CODE)
+                         ENDCASE
+         CASE APPLY.C: I:=I-1
+                       V!I:=CONS(V!I,V!(I+1))
+                       ENDCASE
+         CASE APPLYINFIX.C: CODE:=TL!CODE
+                            I:=I-1
+                            V!I:=CONS(HD!CODE,CONS(V!I,V!(I+1)))
+                            ENDCASE
+         CASE CONTINUE.INFIX.C: CODE:=TL!CODE
+                                V!(I-1):=CONS(HD!CODE,
+                                          CONS(V!(I-1),V!I))
+                         ||NOTE THAT 2ND ARG IS LEFT IN PLACE ABOVE
+                         ||NEW EXPRESSION
+                                ENDCASE
+         CASE IF.C: IF.FLAG:=TRUE
+                    ENDCASE
+         CASE FORMLIST.C: CODE:=TL!CODE
+                          I:=I+1
+                          V!I:=NIL
+                          FOR J=1 TO HD!CODE
+                          DO $( I:=I-1
+                                V!I:=CONS(COLON.OP,CONS(V!I,V!(I+1)))
+                             $)
+                          ENDCASE
+         CASE FORMZF.C: CODE:=TL!CODE
+                        I:=I-HD!CODE
+                        V!I:=CONS(V!I,NIL)
+                        FOR J = HD!CODE TO 1 BY -1
+                        DO V!I:= CONS(V!(I+J),V!I)
+                        V!I:= CONS(ZF.OP,V!I)
+                        ENDCASE
+         CASE CONT.GENERATOR.C:
+                CODE:= TL!CODE
+                FOR J = 1 TO HD!CODE
+                DO V!(I-J):= CONS(GENERATOR,CONS(V!(I-J),
+                                    TL!(TL!(V!I))))
+                ENDCASE
+         CASE MATCH.C:
+         CASE MATCHARG.C:
+                       CODE:=TL!CODE
+                       CODE:=TL!CODE
+                       ENDCASE
+         CASE MATCHPAIR.C: CODE:=TL!CODE
+                        $( LET X = V!(HD!CODE)
+                           I:=I+2
+                           V!(I-1),V!I := HD!(TL!X),TL!(TL!X)  $)
+                           ENDCASE
+         CASE STOP.C: PRINTEXP(V!I,0)
+                      UNLESS IF.FLAG RETURN
+                      WRITES(", ")
+                      PRINTEXP(V!(I-1),0)
+                      RETURN
+         DEFAULT: WRITES("IMPOSSIBLE INSTRUCTION IN *"DISPLAYRHS*"*N")
+      $) ||END OF SWITCH
+         CODE:=TL!CODE
+      $) REPEAT
+   $)
+
+AND PROFILE(EQN) = VALOF ||EXTRACTS THAT PART OF THE CODE WHICH 
+               ||DETERMINES WHICH CASES THIS EQUATION APPLIES TO
+$( LET CODE=TL!EQN
+   IF HD!CODE=LINENO.C
+   DO CODE:=TL!(TL!CODE)
+$( LET C=CODE
+   WHILE PARMY(HD!C) DO C:=REST(C)
+$( LET HOLD=C
+   UNTIL HD!C=IF.C|HD!C=STOP.C DO C:=REST(C)
+   TEST HD!C=IF.C
+   THEN RESULTIS SUBTRACT(CODE,C)
+   OR RESULTIS SUBTRACT(CODE,HOLD)
+$) $) $)
+
+AND PARMY(X) =
+  X=MATCH.C|X=MATCHARG.C|X=MATCHPAIR.C -> TRUE, FALSE
+
+AND REST(C) = VALOF ||REMOVES ONE COMPLETE INSTRUCTION FROM C
+$( LET X=HD!C
+   C:=TL!C
+   IF X=APPLY.C|X=IF.C|X=STOP.C RESULTIS C
+   C:=TL!C
+   UNLESS X=MATCH.C|X=MATCHARG.C RESULTIS C
+   RESULTIS TL!C  $)
+
+AND SUBTRACT(X,Y) = VALOF ||LIST SUBTRACTION
+$( LET Z=NIL
+   UNTIL X=Y
+   DO Z,X:= CONS(HD!X,Z),TL!X
+   RESULTIS Z  ||NOTE THE RESULT IS REVERSED - FOR OUR PURPOSES THIS
+$)             ||DOES NOT MATTER
+
+AND REMOVELINENO(EQN) ||CALLED WHENEVER THE DEFINIENDUM IS SUBJECT OF A
+  ||DISPLAY,REORDER OR (PARTIAL)DELETE COMMAND - HAS THE EFFECT OF
+  ||RESTORING THE STANDARD LINE NUMBERING
+BE IF HD!(TL!EQN)=LINENO.C
+   DO TL!EQN:=TL!(TL!(TL!EQN))
+
+||COMPILER FOR KRC EXPRESSIONS AND EQUATIONS
+
+LET EXP()=VALOF
+$( ENVP,CODEP:=-1,-1
+   EXPR(0)
+   PLANT(STOP.C)
+   RESULTIS COLLECTCODE()
+$)
+
+AND EQUATION() = VALOF ||RETURNS A TRIPLE: CONS(SUBJECT,CONS(NARGS,EQN))
+$( LET SUBJECT,LHS,NARGS = 0,0,0
+   ENVP,CODEP:=-1,-1
+   TEST HAVEID()
+   THEN $( SUBJECT,LHS:=THE.ID,THE.ID
+           WHILE STARTSIMPLE(HD!TOKENS)
+           DO $( LHS:=CONS(LHS,FORMAL())
+                 NARGS:=NARGS+1  $)
+        $) OR
+   TEST HD!TOKENS='=' & LASTLHS\=NIL
+   THEN $( SUBJECT,LHS:=LASTLHS,LASTLHS
+           WHILE ISCONS(SUBJECT)
+           DO SUBJECT,NARGS:=HD!SUBJECT,NARGS+1
+        $)
+   OR $( SYNTAX()
+         RESULTIS NIL  $)
+   COMPILELHS(LHS,NARGS)
+$( LET CODE=COLLECTCODE()
+   CHECK('=')
+   EXPR(0)
+   PLANT(STOP.C)
+$( LET EXPCODE=COLLECTCODE()
+   TEST NARGS>0 & HAVE(',')
+   THEN $( EXPR(0)
+           PLANT(IF.C)
+           CODE:=APPEND(CODE,APPEND(COLLECTCODE(),EXPCODE))  $)
+   OR CODE:=APPEND(CODE,EXPCODE)
+   CHECK(EOL)
+   UNLESS ERRORFLAG DO LASTLHS:=LHS
+   IF NARGS=0 DO LHS:=0 ||IN THIS CASE THE LHS FIELD IS USED TO REMEMBER
+       ||THE VALUE OF THE VARIABLE - 0 MEANS NOT YET SET
+   RESULTIS CONS(SUBJECT,CONS(NARGS,CONS(LHS,CODE)))
+$) $) $)
+
+AND EXPR(N)  ||N IS THE PRIORITY LEVEL
+BE $( TEST HAVE('\')
+      THEN $( PLANT(LOAD.C,NOT.OP)
+              EXPR(3)
+              PLANT(APPLY.C)  $) OR
+      TEST HAVE('+') THEN EXPR(5) OR
+      TEST HAVE('-')
+      THEN $( PLANT(LOAD.C,NEG.OP)
+              EXPR(5)
+              PLANT(APPLY.C)  $) OR
+      TEST HAVE('#')
+      THEN $( PLANT(LOAD.C,LENGTH.OP)
+              EXPR(6)
+              PLANT(APPLY.C)  $)
+      OR $( SIMPLE()
+            WHILE STARTSIMPLE(HD!TOKENS)
+            DO $( SIMPLE()
+                  PLANT(APPLY.C)  $) $)
+   $( LET OP=MKINFIX(HD!TOKENS)
+      WHILE DIPRIO(OP)>=N
+      DO $( LET AND.COUNT=0 ||FOR CONTINUED RELATIONS
+            TOKENS:=TL!TOKENS
+            EXPR(RIGHTPREC(OP))
+            WHILE ISRELOP(OP) & ISRELOP(MKINFIX(HD!TOKENS))
+            DO $( ||CONTINUED RELATIONS
+                  AND.COUNT:=AND.COUNT+1
+                  PLANT(CONTINUE.INFIX.C,OP)
+                  OP:=MKINFIX(HD!TOKENS)
+                  TOKENS:=TL!TOKENS
+                  EXPR(4)  $)
+            PLANT(APPLYINFIX.C,OP)
+            FOR I=1 TO AND.COUNT DO PLANT(APPLYINFIX.C,AND.OP)
+                        ||FOR CONTINUED RELATIONS
+            OP:=MKINFIX(HD!TOKENS)  $)
+$) $)
+
+AND STARTSIMPLE(T) =
+     ISCONS(T) -> HD!T=ID | HD!T=CONST,
+     T='(' | T='[' | T='{' | T='*''
+
+AND SIMPLE()
+BE TEST HAVEID()
+   THEN COMPILENAME(THE.ID) OR
+   TEST HAVECONST()
+   THEN PLANT(LOAD.C,INTERNALISE(THE.CONST)) OR
+   TEST HAVE('(')
+   THEN $( EXPR(0); CHECK(')')  $) OR
+   TEST HAVE('[')
+   THEN TEST HAVE(']')
+        THEN PLANT(LOAD.C,NIL)
+        OR $( LET N=1
+              EXPR(0)
+              IF HAVE(',')
+              DO $( EXPR(0)
+                    N:=N+1  $)
+              TEST HAVE(DOTDOT.SY)
+              THEN $( TEST HD!TOKENS=']'
+                      THEN PLANT(LOAD.C,INFINITY)
+                      OR EXPR(0)
+                      IF N=2 DO PLANT(APPLY.C)
+                      PLANT(APPLYINFIX.C,N=1->DOTDOT.OP, COMMADOTDOT.OP)  $)
+              OR $( WHILE HAVE(',')
+                    DO $( EXPR(0)
+                          N:=N+1  $)
+                    PLANT(FORMLIST.C,N)  $)
+              CHECK(']')  $) OR
+    TEST HAVE('{')  || ZF EXPRESSIONS
+    THEN $( LET N = 0
+            LET HOLD = TOKENS
+            PERFORM.ALPHA.CONVERSIONS()
+            EXPR(0)
+            TEST HD!TOKENS=BACKARROW.SY  ||IMPLICIT ZF BODY
+                      ||NO LONGER LEGAL BUT ACCEPTED FOR A TRANSTIONAL PERIOD
+            THEN TOKENS:= HOLD
+            OR CHECK(';')
+            N:= N + QUALIFIER() REPEATWHILE HAVE(';')
+            PLANT(FORMZF.C,N)
+            CHECK('}') $)  OR
+   TEST HAVE('*'') ||OPERATOR DENOTATION
+   THEN $( TEST HAVE('\') THEN PLANT(LOAD.C,NOT.OP) OR
+           TEST HAVE('#') THEN PLANT(LOAD.C,LENGTH.OP) 
+           OR $( LET OP=MKINFIX(HD!TOKENS)
+                 TEST ISINFIX(OP) THEN TOKENS:= TL!TOKENS OR SYNTAX()
+                 PLANT(LOAD.C,QUOTE.OP)
+                 PLANT(LOAD.C,OP)
+                 PLANT(APPLY.C)  $)
+           CHECK('*'') $)
+   OR SYNTAX()
+
+AND COMPILENAME(N)
+BE $( LET I=0
+      UNTIL I>ENVP | ENV!I=N
+      DO I:=I+1
+      TEST I>ENVP
+      THEN PLANT(LOAD.C,N)
+      OR PLANT(LOADARG.C,I)
+   $)
+
+AND QUALIFIER() = VALOF
+   TEST ISGENERATOR(TL!TOKENS)  ||WHAT ABOUT MORE GENERAL FORMALS?
+   THEN $( LET N=0
+           $( HAVEID()
+              PLANT(LOAD.C,THE.ID)
+              N:= N+1
+           $) REPEATWHILE HAVE(',')
+           CHECK(BACKARROW.SY)
+           EXPR(0)
+           PLANT(APPLYINFIX.C,GENERATOR)
+           IF N>1 DO PLANT(CONT.GENERATOR.C,N-1)
+           RESULTIS N $)
+   OR $( EXPR(0) ; RESULTIS 1  $)
+
+AND PERFORM.ALPHA.CONVERSIONS()
+  ||ALSO RECOGNISES "SUCH THAT" BAR AND CONVERTS IT TO ';'
+  ||TO DISTINGUISH IT FROM "OR"
+BE $( LET P=TOKENS
+      UNTIL HD!P='}' | HD!P=']' | HD!P=EOL
+      DO $( IF HD!P='[' | HD!P='{'
+            DO $( P:= SKIPCHUNK(P)
+                  LOOP  $)
+            IF HD!P='|' & ISID(HD!(TL!P)) & ISGENERATOR(TL!(TL!P))
+            DO HD!P:= ';'
+            IF ISID(HD!P) & ISGENERATOR(TL!P)
+            DO ALPHA.CONVERT(HD!P,TL!P)
+            P:=TL!P  $) $)
+
+AND ISID(X) = ISCONS(X) & HD!X=ID -> TRUE, FALSE
+
+AND ISGENERATOR(T) =
+     \ISCONS(T) -> FALSE,
+     HD!T=BACKARROW.SY | 
+     HD!T=',' & ISID(HD!(TL!T)) & ISGENERATOR(TL!(TL!T)) -> TRUE, FALSE
+
+AND ALPHA.CONVERT(VAR,P)
+BE $( LET T=TOKENS
+      LET VAR1=CONS(ALPHA,TL!VAR)
+      LET EDGE=T
+      UNTIL HD!EDGE=';' | HD!EDGE=BACKARROW.SY | HD!EDGE=EOL
+      DO EDGE:= SKIPCHUNK(EDGE)
+      UNTIL T=EDGE
+      DO $( CONV1(T,VAR,VAR1)
+            T:=TL!T  $)
+      T:= P
+      UNTIL HD!T=';' | HD!T=EOL DO T:= SKIPCHUNK(T)
+      EDGE:= T
+      UNTIL HD!EDGE='}' | HD!EDGE=']' | HD!EDGE=EOL
+      DO EDGE:= SKIPCHUNK(EDGE)
+      UNTIL T=EDGE
+      DO $( CONV1(T,VAR,VAR1)
+            T:= TL!T  $)
+      TL!VAR:= VAR1
+   $)
+
+AND SKIPCHUNK(P) = VALOF
+$( LET KET = HD!P='{' -> '}', HD!P='[' -> ']', -1
+   P:= TL!P
+   IF KET=-1 RESULTIS P
+   UNTIL HD!P=KET | HD!P=EOL
+   DO P:= SKIPCHUNK(P)
+   UNLESS HD!P=EOL DO P:= TL!P
+   RESULTIS(P)
+$)
+
+AND CONV1(T,VAR,VAR1)
+BE IF EQUAL(HD!T,VAR) & HD!T\=VAR DO TL!(HD!T):= VAR1
+
+AND FORMAL() = VALOF
+   TEST HAVEID() THEN RESULTIS THE.ID OR
+   TEST HAVECONST() THEN RESULTIS INTERNALISE(THE.CONST) OR
+   TEST HAVE('(')
+   THEN $( LET P=PATTERN()
+           CHECK(')')
+           RESULTIS P  $) OR
+   TEST HAVE('[')
+   THEN $( LET PLIST,P=NIL,NIL
+           IF HAVE(']') RESULTIS NIL
+           PLIST:=CONS(PATTERN(),PLIST)
+           REPEATWHILE HAVE(',')  ||NOTE THEY ARE IN REVERSE ORDER
+           CHECK(']')
+           UNTIL PLIST=NIL
+           DO $( P:=CONS(COLON.OP,CONS(HD!PLIST,P))
+                 PLIST:=TL!PLIST  $) ||NOW THEY ARE IN CORRECT ORDER
+           RESULTIS P  $) OR
+   TEST HAVE('-') & HAVENUM()
+   THEN $( THE.NUM:= -GETNUM(THE.NUM)
+           RESULTIS STONUM(THE.NUM)  $)
+   OR $( SYNTAX()
+         RESULTIS NIL  $)
+
+AND INTERNALISE(VAL) =
+      VAL=TL!TRUTH->TRUTH,
+      VAL=TL!FALSITY->FALSITY,
+      ISATOM(VAL) -> CONS(QUOTE,VAL), VAL
+
+AND PATTERN() = VALOF
+$( LET P=FORMAL()
+   IF HAVE(':')
+   DO P:=CONS(COLON.OP,CONS(P,PATTERN()))
+   RESULTIS P  $)
+
+AND COMPILELHS(LHS,NARGS)
+BE $( ENVP:=NARGS-1
+      FOR I=1 TO NARGS
+      DO $( ENV!(NARGS-I):=TL!LHS
+            LHS:=HD!LHS  $)
+      FOR I=0 TO NARGS-1 DO COMPILEFORMAL(ENV!I,I)
+   $)
+
+AND COMPILEFORMAL(X,I)
+BE TEST ISATOM(X)  ||IDENTIFIER
+   THEN $( LET J=0
+           UNTIL J>=I | ENV!J=X
+           DO J:=J+1  || IS THIS A REPEATED NAME?
+           TEST J>=I
+           THEN RETURN  || NO, NO CODE COMPILED
+           OR PLANT(MATCHARG.C,I,J)  $) OR
+   TEST ISNUM(X) | X=NIL | ISCONS(X)&HD!X=QUOTE
+   THEN PLANT(MATCH.C,I,X) OR
+   TEST ISCONS(X) & HD!X=COLON.OP & ISCONS(TL!X)
+   THEN $( PLANT(MATCHPAIR.C,I)
+           ENVP:=ENVP+2
+        $( LET A,B=ENVP-1,ENVP
+           ENV!A,ENV!B:= HD!(TL!X) , TL!(TL!X)
+           COMPILEFORMAL(ENV!A,A)
+           COMPILEFORMAL(ENV!B,B)
+        $) $)
+   OR WRITES("Impossible event in *"COMPILEFORMAL*"*N")
+
+AND PLANT(OP,A,B)
+BE $( CODEP:=CODEP+1
+      CODEV!CODEP:=OP
+      IF OP=APPLY.C|OP=IF.C|OP=STOP.C RETURN
+      CODEP:=CODEP+1
+      CODEV!CODEP:=A
+      UNLESS OP=MATCH.C|OP=MATCHARG.C RETURN
+      CODEP:=CODEP+1
+      CODEV!CODEP:=B
+   $)
+
+AND COLLECTCODE() = VALOF  ||FLUSHES THE CODE BUFFER
+$( LET X=NIL
+   FOR I=CODEP TO 0 BY -1 DO X:=CONS(CODEV!I,X)
+   CODEP:=-1
+   RESULTIS X
+$)
+
+

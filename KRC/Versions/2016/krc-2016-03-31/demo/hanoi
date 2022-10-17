@@ -1,0 +1,10 @@
+    solve :- say `solve n!'
+             to see the moves for "Towers of Hanoi" with n discs;
+    solve n = title n ++ hanoi n "A" "B" "C"
+
+    title n = ["TOWERS OF HANOI WITH ",n," DISCS\n"]
+
+    hanoi 0 a b c = []
+    hanoi n a b c = hanoi (n - 1) a c b ++ move a b ++ hanoi (n - 1) c b a
+
+    move a b = ["   move disc from ",a," to ",b,nl]

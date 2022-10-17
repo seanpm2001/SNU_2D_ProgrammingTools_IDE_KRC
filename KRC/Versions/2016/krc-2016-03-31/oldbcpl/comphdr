@@ -1,0 +1,132 @@
+||KRC COMPILER HEADER FILE
+
+||----------------------------------------------------------------------
+||The KRC system is Copyright (c) D. A. Turner 1981
+||All  rights reserved.  It is distributed as free software under the
+||terms in the file "COPYING", which is included in the distribution.
+||----------------------------------------------------------------------
+
+||LEX ANALYSER MANIFESTS
+MANIFEST $( ID=0; CONST=1; EOL='*N'; BADTOKEN=256
+            PLUSPLUS.SY=257; GE.SY=258; LE.SY=259; NE.SY=260
+            DOTDOT.SY=261; BACKARROW.SY=262; DASHDASH.SY=263
+            STARSTAR.SY=264
+         $)
+
+||LEX ANALYSER GLOBALS
+GLOBAL $( TOKENS:150; THE.ID:151; THE.CONST:152      || BASES
+          EXPFLAG:153; ERRORFLAG:154; THE.NUM:155; THE.DECIMALS:156
+          EQNFLAG:157
+          CASECONV:158
+          UPPERCASE:159  ||A FLAG - IF SET UPPER AND LOWER CASE ARE TREATED AS EQUIVALENT
+          COMMENTFLAG:160; SUPPRESSPROMPTS:161
+          FILECOMMANDS:162  || BASE
+          WRITETOKEN:163
+       $)
+
+|| KRC EXPRESSION REPRESENTATIONS
+|| THE INTERNAL REPRESENTATIONS OF EXPRESSIONS IS AS FOLLOWS
+|| EXP::= ID|CONST|APPLN|OTHER
+|| ID::= ATOM
+|| CONST::= NUM|CONS(QUOTE,ATOM)|NIL
+|| APPLN::= CONS(EXP,EXP)
+|| OTHER::= CONS(OPERATOR,OPERANDS)
+|| NOTE THAT THE INTERNAL FORM OF ZF EXESSIONS IS CONS(ZF.OP,BODY) :-
+||  BODY::= CONS(EXP,NIL) | CONS(QUALIFIER,BODY)
+||  QUALIFIER::= EXP | CONS(GENERATOR,CONS(ID,EXP))
+
+|| OPERATOR VALUES:
+MANIFEST $( ALPHA=-2; INDIR=-1; QUOTE=0   || QUASI OPERATORS
+            COLON.OP=1; APPEND.OP=2; LISTDIFF.OP=3; OR.OP=4; AND.OP=5; GR.OP=6
+            GE.OP=7; NE.OP=8; EQ.OP=9; LE.OP=10; LS.OP=11; PLUS.OP=12
+            MINUS.OP=13;TIMES.OP=14;DIV.OP=15;REM.OP=16;EXP.OP=17;DOT.OP=18
+            DOTDOT.OP=19; COMMADOTDOT.OP=20; ZF.OP=21; GENERATOR=22
+            LENGTH.OP=23; NEG.OP=24; NOT.OP=25
+            QUOTE.OP=26    ||USED TO CONVERT AN INFIX INTO A FUNCTION 
+         $)
+
+||INTERNAL REPRESENTATION OF KRC EQUATIONS
+||VAL FIELD OF ATOM ::= CONS(CONS(NARGS,COMMENT),LISTOF(EQN))
+|| COMMENT ::= NIL | CONS(ATOM,COMMENT)
+|| EQN ::= CONS(LHS,CODE)
+||(IF NARGS=0 THERE IS ONLY ONE EQUATION IN THE LIST AND ITS LHS FIELD
+|| IS USED TO REMEMBER THE VALUE OF THE VARIABLE)
+|| LHS ::= ID | CONS(LHS,FORMAL)
+|| FORMAL ::= ID | CONST | CONS(COLON.OP,CONS(FORMAL,FORMAL))
+|| CODE ::= INSTR*
+|| INSTR ::= LOAD.C <ID|CONST|MONOP> |
+||           LOADARG.C INT |
+||           APPLY.C |
+||           APPLYINFIX.C DIOP |
+||           IF.C |
+||           FORMLIST.C INT |
+||           MATCH.C INT CONST
+||           MATCHARG.C INT INT |
+||           MATCHPAIR.C INT |
+||           STOP.C |
+||           LINENO.C INT |
+||           CONTINUE.INFIX.C DIOP |
+||           CONT.GENERATOR.C INT|
+||           FORMZF.C INT|
+||           CALL.C BCPL_FN
+
+||INSTRUCTION CODES
+MANIFEST $( LOAD.C=0; LOADARG.C=1; APPLY.C=2; APPLYINFIX.C=3
+            IF.C=4; FORMLIST.C=5; MATCH.C=6; MATCHARG.C=7
+            MATCHPAIR.C=8; STOP.C=9; LINENO.C=10; CALL.C=11
+            CONTINUE.INFIX.C=12; FORMZF.C=13; CONT.GENERATOR.C=14
+       ||THE LINENO COMMAND HAS NO EFFECT AT EXECUTION TIME, IT IS USED
+       ||TO GIVE AN EQUATION A NON STANDARD LINE NUMBER FOR INSERTION 
+       ||PURPOSES
+         $)
+
+||EXTERNAL SYNTAX FOR KRC EXPRESSIONS AND EQUATIONS
+|| EQUATION ::= LHS=EXP | LHS=EXP,EXP
+|| LHS ::= ID FORMAL*
+|| FORMAL ::= ID | CONST | (PATTERN) | [PATTERN-LIST?]
+|| PATTERN ::= FORMAL:PATTERN | FORMAL
+|| EXP ::= PREFIX EXP | EXP INFIX EXP | SIMPLE SIMPLE*
+|| SIMPLE ::= ID | CONST | (EXP) | [EXP-LIST?] | [EXP..EXP] | [EXP..] |
+||            [EXP,EXP..EXP] | [EXP,EXP..] | {EXP;QUALIFIERS}
+|| QUALIFIERS ::= QUALIFIER | QUALIFIER;QUALIFIERS
+|| QUALIFIER ::= EXP | NAME-LIST<-EXP
+|| CONST ::= INT | "STRING"
+
+|| PREFIX AND INFIX OPERATORS, IN ORDER OF INCREASING BINDING POWER:
+
+||    (PREFIX)               (INFIX)            (REMARKS)
+||                          :  ++  --           right associative
+||                             |
+||                             &
+||       \     
+||                     >  >=  =  \=  <=  <      continued relations allowed
+||                            +  -              left associative
+||     +  -      
+||                          *  /  %             left associative 
+||                           **  .              (** is right associative)
+||      #
+||Notes - "%" is remainder operator, "." is functional composition and "#" takes the length of lists
+
+||COMPILER GLOBALS
+
+||PROCEDURES
+GLOBAL $( SETUP.INFIXES:170; READLINE:171; HAVE:172; HAVEID:173
+          SYNTAX:174; CHECK:175; HAVECONST:176;HAVENUM:177
+          EQUATION:178; PROFILE:179; PRINTEXP:180; DISPLAY:181
+          EXP:182; REMOVELINENO:183
+          PRINTATOM:184   ||DEFINED IN KRC_REDUCER
+          ISID:185
+       $)
+
+||OTHERS
+GLOBAL $( CODEV:195; ENV:196       || BASES FOR GARBAGE COLLECTION
+          TRUEWRCH:197
+          TRUTH:198; FALSITY:199; INFINITY:200  ||BASES
+          ENVP:201; CODEP:202
+          LASTLHS:203       ||BASE
+       $)
+
+
+
+
+

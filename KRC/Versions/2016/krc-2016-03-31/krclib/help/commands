@@ -1,0 +1,38 @@
+	SUMMARY OF AVAILABLE COMMANDS
+
+EXP?               Evaluate an expression and show its value
+EXP!               The same but flat-print the value
+EQUATION           Add an equation to the script
+NAME:- ... ;	   Add a comment to the script
+NAME               Display the equations for NAME
+NAME..NAME         Display a section of the script
+/                  Display the whole script
+/delete NAMES      Delete the named definitions (shortform /d)
+/delete NAME PARTS Delete the numbered equations from function NAME
+/delete		   Delete the whole script
+/reorder NAME NAMES Move equations for NAMES after those for NAME
+/reorder NAME PARTS Reorder NAME's equations
+/aborder           Sort the script into alphabetical order
+/rename FROMs,TOs  Exchange names throughout the script
+/save [FILE]       Save script in FILE (default: last file used)
+/get [FILE]        Add contents of FILE to the script (default: last used)
+/list [FILE]       Display contents of FILE (default: last file used)
+/dir               List filenames in current directory/folder
+/file (or /f)      Show the current default filename
+/file FILE         Change the default filename
+/quit (or /q)      End this KRC session
+/names             Display the names defined in your script
+/lib               Display the names defined in the prelude/library
+/clear             Clear all remembered values
+/count		   Turn on reduction counting
+/gc                Enable garbage collection reports
+/dic		   Report state of string space
+/reset		   Turn off /count, /gc and /object
+/help (or /h)	   List help topics
+/help topic	   Show helpfile for topic
+--
+/openlib           Allows you to modify equations in the prelude/library
+/object		   Display internal representation before each evaluation
+/lpm		   List post mortem - display KRC's internal state
+   NAMES ::= NAME | NAME..NAME | NAME..
+   PARTS ::= INT | INT..INT | INT..

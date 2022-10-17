@@ -1,0 +1,13 @@
+    soln :- demonstrates the list of successes method, see D. A. Turner
+            "Recursion Equations as a Programming Language" (1982)
+            soln!
+            prints all 92 solutions to the 8 queens problem;
+    soln = layn (queens 8)
+
+    queens :- `queens n' lists all solutions to the n queens problem;
+    queens 0 = [[]]
+    queens n = {q:b|q<-[1..8];b<-queens (n - 1);safe q b}
+
+    safe q b = and {\checks q b i|i<-[0..#b - 1]}
+
+    checks q b i = q == b i | abs (q - b i) == i + 1

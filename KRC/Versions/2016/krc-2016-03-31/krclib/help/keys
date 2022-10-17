@@ -1,0 +1,27 @@
+	KEY BINDINGS IN KRC SESSION
+always available:
+----
+Backspace (Ctrl-H)	delete the previous character
+Enter			action the current line
+Ctrl-C			interrupt! returns to KRC session prompt
+Ctrl-D			on a line by itself, ends the KRC session
+Ctrl-Z			stop! suspends KRC and returns to Unix command line
+			(type "fg" to resume KRC session)
+
+additional bindings enabled by "linenoise", which retains 100 lines of
+command history:
+----
+left-arrow (Ctrl-B)	move cursor one character left
+right-arrow (Ctrl-F)	move cursor one character right
+up-arrow (Ctrl-P)	back to previous line of command history
+down-arrow (Ctrl-N)	forward to next line of command history
+Home (Ctrl-A)		go to start of line
+End (Ctrl-E)		go to end of line
+Enter			action this line (cursor need not be at line end)
+Ctrl-D			delete character under cursor
+			(but on an empty line, quits KRC)
+Ctrl-W			delete word before the cursor
+Ctrl-K			delete from cursor to line end
+Ctrl-U			delete current line from history
+Ctrl-T			swap character under cursor with the previous one
+Ctrl-L			clear the screen

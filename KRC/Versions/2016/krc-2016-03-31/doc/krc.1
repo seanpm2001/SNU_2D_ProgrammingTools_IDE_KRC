@@ -1,0 +1,974 @@
+.TH KRC 1 2016-03-31
+.SH NAME
+krc \- Kent Recursive Calculator
+.SH SYNOPSIS
+.B krc
+[\fIoptions\fR] [\fIfile\fP] [\fIarguments\fP] ...
+.SH OPTIONS
+.TP
+\fB-h\fR \fIcells\fR
+Specify the size of the heap.
+On a 32-bit computer, each cell requires
+16 bytes, on a 64-bit computer 32 bytes.
+The default is 128000 cells.
+.TP
+\fB-d\fR \fIbytes\fR
+Specify the size of the dictionary, or "string space",
+used to store identifiers, comments and strings.
+The default is 64000 bytes.
+.TP
+\fB-n\fR
+Don't include the prelude of standard definitions.
+.TP
+\fB-l\fR \fIlib\fR
+Use \fIlib\fR in place of the prelude.
+.TP
+\fB-L\fR
+Use a legacy prelude from 1981 in place of the prelude.
+.TP
+\fB-s\fR
+Load prelude or \fIlib\fR stripped of comments (saves string space).
+.TP
+\fB-c\fR
+Turn on reduction counting (the same as the \fB/count\fR command).
+.TP
+\fB-g\fR
+Turn on garbage collector statistics (the same as the \fB/gc\fR command).
+.TP
+\fB-o\fR
+Turn on the printing of compiled objects (the same as the \fB/object\fR command).
+.TP
+\fB-z\fR
+Sets base for list indexing to 1 instead of 0 (legacy option).
+.TP
+\fB-e \fIexpression[?!]\fR
+Instead of being interactive, evaluate \fIexpression\fR and display its
+value (with `?') or flat-print the value (with `!').
+.PP
+If a file name is given after the options, its contents will
+be loaded as the \fIcurrent script\fR.
+If you don't give a file name the current script is initially empty.
+.PP
+Arguments following the file are permitted only when a \fB-e\fP option
+is present and in this case the file name and any arguments are placed
+in a list of strings called "\fBargv\fP".
+.SH DESCRIPTION
+Kent Recursive Calculator was one of the earliest higher-order, lazy,
+purely functional programming systems. Written around 1980, it was a
+simplified version of its author's language SASL,
+developed at St Andrews University in 1972-6, and in turn was succeeded
+by Miranda, the main precursor of Haskell. These days it has the
+advantages of being a simple language of this kind capable of running
+in very little memory (75KB code plus whatever space is allocated for
+heap and dictionary).
+.PP
+A KRC program is called a \fIscript\fP, which consists of
+a sequence of \fIdefinitions\fP each of which consists of an
+optional comment followed by one or more \fIequations\fP, one per line.
+.PP
+When you invoke krc, it loads a set of standard
+definitions called the \fIprelude\fP, then prints a welcome
+message followed by a prompt, \fBkrc>\fP.  You have now entered a KRC \fIsession\fP.
+In a session you can type commands, expressions to be evaluated, and 
+definitions to be entered in the current script.
+A new prompt appears as each task is completed, until you end the session.
+.SH COMMANDS
+The interpreter accepts a range of commands
+to inspect, edit, load and save scripts,
+as well as a few system-oriented things.  Each command is
+entered on a single line, followed by [Enter].
+.PP
+The command to inspect a definition, say of `foo', is just the name
+on a line by itself
+.br
+\ \ \ \ foo
+.br
+the system responds by displaying the definition associated with
+`foo', which may be in the prelude or in the current script.
+If the definition has more than one equation these are shown
+numbered, from \fB1\fP, the numbers are used when editing definitions.
+.PP
+You can display a section of the script, say from 
+the definition of `foo' to `bar' by typing
+.br
+\ \ \ \ foo\ ..\ bar
+.br
+.PP
+The other commands all start with a \fB/\fR character.
+.TP
+\fB/\fR
+Displays all of the current script
+.TP
+\fB/quit\fP
+Ends a KRC session. Shorthand:\ \fB/q\fP.
+Typing control-D also has this effect.
+.PP
+Be aware that ending a session does not automatically save the current
+script, for that you must use \fB/save\fP (see below).
+.PP
+In the commands which follow `\fIname\fP' means 
+one of the names defined in the current script;
+.PP
+Where it says `\fIname(s)\fP'
+you can put a name, several names separated by
+spaces, or a range 
+\fIfoo\fB..\fIbar\fR which refers to definitions \fIfoo\fP through \fIbar\fP
+of the current script,
+or \fIfoo\fB..\fR which means from the definition of \fIfoo\fP
+to the end of the script.
+.PP
+Where it says `\fIpart(s)\fP', this refers to equation numbers 
+from a definition in the script, for deletion or reordering.
+.PP
+A \fIpart\fP can be a single number like \fB1\fP,
+a range like \fB2..4\fP, 
+something like \fB4..\fP, which means from 
+equation \fB4\fP to the end of the definition;
+\fIpart(s)\fP means a list of these separated by spaces.
+.TP
+\fB/delete\fP \fIname(s)\fP
+Deletes one or more definitions from the script.
+Shorthand:\ \fB/d\fP
+.br
+If no 
+\fInames\fP are supplied, it deletes the whole script (\fBbeware!\fP).
+.TP
+\fB/delete\fP \fIname\fP \fIpart(s)\fP
+Deletes the numbered equations from the definition of \fIname\fP.
+To delete the comment, enter an empty comment for the same name,
+for example "foo:-;"
+.TP
+\fB/reorder\fP \fIname\fP \fIname(s)\fP
+Place the definitions of one or more \fInames\fP immediately after those
+for the first mentioned \fIname\fP, in the order shown.
+.TP
+\fB/reorder\fP \fIname\fP \fIpart(s)\fP
+Reorder the equations within a definition by moving the
+numbered equations listed in \fIpart(s)\fP to the top of the
+definition, in the order shown.
+.TP
+\fB/aborder\fP
+Sorts the script's definitions into alphabetical order.
+.TP
+\fB/rename\fP \fIfrom\fB,\fIto\fR
+Change the name `\fIfrom\fP' into `\fIto\fP', in all
+the places where it is used in the
+script; \fIfrom\fP and \fIto\fP can both be lists of names
+separated by spaces, in which case the first name in \fIfrom\fP is
+changed to the first name in \fIto\fP and so on. This allows you
+to swap two or more names in the script without losing any of them.
+.TP
+\fB/save\fP \fIfilename\fP
+Saves the script in the named file.
+If \fIfilename\fP is omitted, it saves to the last filename mentioned.
+.TP
+\fB/get\fP \fIfilename\fP
+Adds the contents of a file to the script.
+If \fIfilename\fP is omitted, from the last filename mentioned.
+.TP
+\fB/file\fP
+Shows the current default filename. Shorthand:\ \fB/f\fP
+.TP
+\fB/file\fP \fIfilename\fP
+Changes the default filename.
+.TP
+\fB/list\fP \fIfilename\fP
+Lists the contents of a disk file, like Unix's "cat" or DOS's "type" commands.
+If the \fIfilename\fP is omitted, it reads from the last filename mentioned.
+.TP
+\fB/dir\fR
+List the filenames in the current directory or folder, like Unix's "ls"
+or DOS's "dir" commands.
+.TP
+\fB/names\fP
+Displays the names defined in the script.
+.TP
+\fB/lib\fP
+Displays the names defined in the prelude.
+.TP
+\fB/openlib\fP
+Allows you to modify the definitions of the prelude (they are normally write-protected).
+Any changes are made to the copy of the definitions held in memory during
+the session - only if you use \fB/save\fP (filename) do they get written to a file.
+.TP
+\fB/clear\fP
+Clear all memo fields.  When a simple definition in the script is expanded
+i.e. one like \fBfoo\fP = STUFF, the value is stored in a memo field for \fBfoo\fP
+so STUFF need not be evaluated again. These are cleared automatically when any
+definition in the script is changed.
+.TP
+\fB/count\fP
+Turns on reduction counting.
+.TP
+\fB/gc\fP
+Enables the printing of memory usage information each time a
+garbage collection happens.
+.TP
+\fB/reset\fP
+Turns off reduction counting, garbage collection information 
+and object display (see below).
+.TP
+\fB/dic\fP
+Report current state of string space.
+.TP
+\fB/help\fR
+Prints a list of help topics. Shorthand: \fB/h\fR
+.TP
+\fB/help\fR \fItopic\fP
+Displays the relevant helpfile, using the UNIX command `\fBless\fR'.
+This allows you to move backwards
+(type `b') in the file as well as forwards (type SPACE, or ENTER to move
+forward one line at a time), type `q' to quit.  Say `\fBman\ 1\ less\fR'
+on the UNIX command line for more details.
+.PP
+These last commands are for use in debugging the system:
+.TP
+\fB/object\fP
+Displays the internal representation of each expression before evaluating it.
+.TP
+\fB/lpm\fP
+The "List Post Mortem" displays the KRC machine's internal state.
+.SH EXPRESSION EVALUATION
+An \fIexpression\fP is a mathematical formula denoting a value. For details
+of what can be in an expression see later sections:
+IDENTIFIERS, DATA TYPES, OPERATORS and ZF EXPRESSIONS.
+To evaluate an expression in a KRC session and print the result
+on the screen, type the expression followed by `\fB?\fP'.
+.PP
+For example, you could type \fB2+2?\fP to obtain \fB4\fP.
+.PP
+If the value is a data structure it is printed as you would enter it, with
+quote marks around strings,
+square brackets around lists and commas between list elements.
+For example (`++' joins lists together):
+.PP
+\ \ \ \ \fBkrc>\fP [1..3]++["...\\n"]++[2*2]?
+.PP
+\ \ \ \ \fB[1,2,3,"...\\n",4]\fP
+.PP
+Note that with `\fB?\fP' control characters in a string are shown,
+not obeyed ("\\n" means newline).
+.PP
+An alternative method of printing uses `\fB!\fP' in place of `\fB?\fP'.
+.PP
+\ \ \ \ \fBkrc>\fP [1,2,3,"...\\n",4]!
+.PP
+\ \ \ \ \fB123...
+.br
+\ \ \ \ 4\fP
+.PP
+`\fB!\fP' prints strings without quotes, obeying any control characters, numbers
+are printed in the usual way and with lists
+`\fB!\fP' scans left to right, recursively scanning any sublists encountered,
+printing only the atoms (numbers and strings).
+The effect is as if the data were squashed flat and joined up
+into a single string (although `\fB!\fP' does not actually use
+any additional string space).
+.PP
+As a general guide `?' (print values to show structure) is used when developing
+and testing functions and `!' (flat-print) for the final output of a program
+where you want to control layout.
+Note that `?' adds a trailing newline while `!' doesn't.
+.PP
+The reader may find it helpful to study the function \fBshow\fP defined in the
+prelude; 
+.RS
+\fBx?\fP
+.RE
+is actually equivalent to
+\fBshow\ x\ :\ ["\\n"]!\fP
+.PP
+\fBReminder\fP: For KRC to print the value of an expression it must be followed
+by `\fB?\fP' or `\fB!\fP'.
+.SH THE SCRIPT: COMMENTS AND EQUATIONS
+A KRC script consists of a sequence of \fIdefinitions\fP, each of which
+is composed of an optional \fIcomment\fP followed by one or more \fIequations\fP.
+The order of the definitions has no significance as they are all in scope
+throughout the script, but the order of
+the equations within a definition may affect its meaning, as they are tried
+in the order written.
+.PP
+A comment is the name, of a function or other data item, followed by the two
+characters "\fB:-\fP" followed by any number of lines of text
+and terminated by the first semicolon "\fB;\fP".
+.br
+\ \ \ \ flub :- here is some text
+.br
+\ \ \ \ \ \ \ \ \ \ \ \ ... explaining "flub";
+.PP
+An equation is one line of a definition and has this form:
+.RS
+\fBLHS = expression\fP
+.RE
+or
+.RS
+\fBLHS = expression, guard\fP
+.RE
+where \fBLHS\fP ("left hand side") is a
+name optionally followed by formal parameters and \fBexpression\fP
+describes the value which the lhs assumes in this case.
+.PP
+The optional \fBguard\fP is a Boolean (i.e. truth-valued) expression which determines
+if the equation is applicable. If the guard evaluates to "TRUE"
+the equation is used, otherwise it is not.
+.PP
+Note that equations are written one per line
+(no terminating semicolons needed, or allowed).  Examples
+.RS
+radix = 10
+.br
+girls = ["susan","jill","pandora"]
+.RE
+are simple definitions.  A simple definition has just a name as its LHS.
+.PP
+We can define a function by introducing a formal parameter
+.RS
+sq n = n * n
+.RE
+The formal parameter `n' is a local variable of the equation.  Any name
+can be used as a formal parameter, it does not have to be a single letter.
+However name clashes, like using `sq' as a formal parameter when it
+is also a top-level name, are best avoided (occurences of the name
+on the right of the equation will refer to the formal parameter).
+.PP
+Names which appear at the head of an LHS, which to this point are
+`radix', `girls' and `sq', are known as \fItop-level names\fP and have the whole
+script as their scope, as do the names defined in the prelude.  (The scope of 
+a name is the region of text in which it can be used with the same meaning.)
+.PP
+Here is a function of two parameters
+.RS
+sqdiff m n = m*m - n*n
+.RE
+We call it by writing e.g.
+.RS
+sqdiff 2 3
+.RE
+not sqdiff(2,3) as you would in some other programming languages.
+.PP
+More complex function definitions
+may require several equations, for example
+.RS
+fac 0 = 1
+.br
+fac n = n * fac(n-1)
+.RE
+defines a factorial function which can then
+be used, for example by writing
+.RS
+fac\ 10?
+.RE
+Note the use of a constant, 0, as formal parameter in the first equation.
+This is one way to do case analysis.
+.PP
+Guards can also be used to do case analysis.
+A safer version of `fac' would be:
+.RS
+fac n = 1, n <= 0
+.br
+\ \ \ \ \ \ = n * fac(n-1)
+.RE
+Here we use a guard, `n <= 0', to stop `fac' going into a loop on negative numbers.
+Entering an equation with no left hand side
+means that the LHS is the same as in the line previously entered.
+.PP
+We have seen that a formal parameter can be a name or a literal constant.
+It can also be a pattern to match list structure as in this example \-
+`rotor' carries out a simple rotation on lists of length 3.
+.RS
+rotor [a,b,c] = [b,c,a]
+.RE
+.PP
+To match lists of unknown length we use a pattern involving `:',
+for example the functions `hd', `tl', which return the first element
+of a list, and the remainder of the list without the first element, are defined
+.RS
+hd (a:x) = a
+.br
+tl (a:x) = x
+.RE
+.PP
+Another example is this function which copies lists of length <=2 and extracts
+the first 2 elements of lists with length >2.
+.RS
+take2 [] = []
+.br
+take2 [a] = [a]
+.br
+take2 (a:b:x) = [a,b]
+.RE
+Note that ':' is right associative so `a:b:x' means `a:(b:x)'.
+.PP
+In summary, an LHS consists of the name being defined followed by zero
+or more formal parameters.  Each formal parameter can be 
+.RS
+a \fIname\fP like \fBx\fP or \fBheight\fP
+.br
+a \fIliteral\fP number or string like \fB3\fP or \fB"bill"\fP
+.br
+a \fIpattern\fP like \fB[p,q,r]\fP or \fB(a : x)\fP
+.br
+where any of the p, q, r, a, x could themselves be a name, literal or pattern.
+.RE
+Names introduced by formal parameters are local to the equation in
+which they appear.
+.PP
+An equation with
+one or more patterns in its LHS applies when the actual parameters
+of a function invocation
+match the corresponding formal parameters; that is they have the same list
+structure and, where the pattern contains a literal, the values are equal.
+If there is also a guard, that must evaluate to "TRUE".
+.PP
+Where a definition has more than one equation they must all have the
+same number of formal parameters.  Notwithstanding this, it is possible
+in KRC to define functions which take a variable number of arguments,
+because the right hand sides can be of varying type. (Terminology \- 
+the actual parameters of a function are also called its \fIarguments\fP.)
+.PP
+KRC supports the interactive development of scripts.
+.PP
+To enter definitions in the script during a session you simply type in the
+equations and comments at the prompt, one at a time.  You can then enter
+expressions to test your definitions and edit them (i.e. delete,
+reorder etc) using the COMMANDS listed earlier and re-enter equations as
+needed.  The line editing facilities provided by "linenoise" and/or
+the use of a mouse to cut and paste make this task relatively easy.
+.PP
+If you enter an equation with the same LHS and
+guard as an existing one it will replace it.  Entering a comment will replace an
+earlier comment on the same name.  To delete a comment enter an empty replacement
+.RS
+name :-;
+.RE
+.PP
+Another way of proceeding is to use an editor to create the script and
+then start a krc session with it as the file.  The 
+KRC system was designed to allow it to be used without a separate editor (back
+in 1980 screen editors like \fBvi\fP and \fBemacs\fP were not widely
+available as they are now).
+.SH IDENTIFIERS
+The names used in scripts and expressions are built from
+\fBA-Z\fP \fBa-z\fP \fB0-9\fP underscore (\fB_\fP) and apostrophe (\fB\'\fP),
+start with a letter
+and can be of any length.  Case is significant, so X and x are different identifiers.
+Note that KRC has no reserved words.
+.SH DATA TYPES
+KRC has four data types: numbers, strings, lists and functions.
+.PP
+The four types of value have the same "civil rights" \- any value can be (i) named,
+(ii) included in a list, (iii) passed to a function
+as its argument, (iv) returned by a function as result.
+.PP
+There is no static type system \- values of different types can be freely mixed, for
+example as elements of a list and a function can accept
+arguments of more than one type and return results of different 
+types for different inputs.  
+Type errors, e.g. trying to multiply two strings, are detected at
+run time.  Languages of this kind (LISP is another example) are often
+called `typeless', but \fIdynamically typed\fP is more accurate.
+.PP
+A value can be tested by the four functions `number', `string', `list' and
+`function' and returns "TRUE" for one of these,
+"FALSE" for the others. There is also a function `char' which recognises
+strings of length 1 and a function `bool' which reconises the strings "TRUE" and "FALSE".
+.PP
+\fBNumbers\fP are integers (whole numbers, positive, negative and zero)
+written in the usual decimal notation, e.g. 3 -17 500
+.PP
+\fBStrings\fP are sequences of characters enclosed in double quotes, e.g.
+.RS
+"cattle" "oh my!"
+.RE
+.PP
+Control characters are written using `\\', e.g. "\\n" is newline.
+The escape conventions are as in C
+.RS
+\\a (bell) \\b (backspace) \\f (formfeed) \\n (newline) \\r (carriage return)
+\\t (tab) \\v (vertical tab) \\\\\ (backslash) \\' \\"
+.RE
+and numeric character codes
+.RS
+\\ddd (up to three decimal digits).
+.RE
+KRC character codes are in the range 0\-255 (of which 0\-127 are ascii,
+the meaning of codes above 127 depends on the \fIlocale\fP).
+.PP
+Note the strings "TRUE", "FALSE" are used as truthvalues,
+there is no separate Boolean type.
+.PP
+KRC has no separate type `character' distinct from `string'.
+A character is just a string of length 1, e.g. "a"
+(you cannot write this as \'a\', that would not be recognised).
+.PP
+The prelude function `explode' converts a string into
+a list of characters, e.g. 
+.RS
+\fBkrc>\fP explode "hello"?
+.br
+["h","e","l","l","o"]
+.RE
+.PP
+KRC treats strings as atomic; they are stored uniquely in packed
+form.  Strings can be tested for equality or order without unpacking them but
+to access the internal structure you must use `explode'.
+.PP
+There is a function `implode' which compresses a list of strings into a
+single string, but this is less often needed.  Processing of textual
+data is typically done on lists of characters (or sometimes trees)
+and given `!' there is no need to convert
+the result back into a single string before printing.
+.PP
+\fBLists\fP are written using square brackets and commas between
+elements, e.g. [1,2,3,"eric"].  Note
+the empty list, [] and singletons, e.g. [3].
+.PP
+An important operation on lists is `\fB:\fP' which prefixes an element
+to the front of a list.  So `a:[]' is `[a]', `a:b:[]' is
+`[a,b]' and so on.
+Note also the `\fB++\fP' operator which appends one list to another.  The
+elements  of `x++y' are those of `x' followed by those of `y'.
+.PP
+As some, or all, of the elements of a  list can be lists it
+is possible to construct multi-dimensional arrays (as lists of lists of ...)
+and more generally trees, of any shape.
+Lists can be of infinite length, for example
+.RS
+ones = 1 : ones
+.RE
+is an infinite list of ones and
+.RS
+abyss = ["down",abyss,"up"]
+.RE
+is a tree of infinite depth.  These examples are possible because of KRC's general strategy
+of \fIlazy evaluation\fP, which includes not evaluating the parts of a structure until they are accessed.
+.PP
+There is a notation `[a..b]' for a sequence of consecutive integers, e.g. `[-10..10]'
+is a list with 21 elements.  This notation also has an infinite form, e.g. `[2..]'
+is a list of the integers starting at 2.
+.PP
+Similarly the notation `[a,b..c]' can be used for an arithmetic sequence running
+from a to c with step (b-a).  E.g. [1,3..99] are the odd numbers from 1 to 99.
+Again this has an infinite form, e.g. [0,-5..]
+.PP
+A list can be applied to a non-negative number, n say,
+to extract its n'th element (counting from 0). So given
+.RS
+x = ["mon","tue","wed","thu","fri"]
+.RE
+then `x 0' is "mon", `x 6' is "fri", and `x 7' is an error.
+A list can therefore be supplied in a context where a function is expected, for example
+as an operand of `.' the functional composition operator.
+.PP
+\fBFunctions\fP: a function calculates an output
+value from given input value(s).  The rules of calculation are given by its defining equations
+(except for a few built-in functions defined in machine code).
+.PP
+Applying a function to its input values (or \fIarguments\fP) is done by juxtaposition, e.g.
+.RS
+f x y
+.RE
+If an argument is an operator expression or another function application
+it needs parentheses to force the correct parse. E.g.
+.RS
+f (g x) (y+2)
+.RE
+.PP
+A prefix or infix operator in single quotes
+denotes the corresponding one- or two-argument function, e.g.
+.RS
+ops = [\'+\', \'-\', \'*\', \'/\']
+.RE
+is a list of the four functions of arithmetic.  See below, under OPERATORS.
+.PP
+\fIContinued application\fP: a function application can return a function,
+e.g. (ops n) is a function, which one depends on `n'.
+We can immediately apply this to its arguments, thus
+.RS
+ops n x y
+.RE
+We could write `(ops n) x y' but the parentheses are not needed as
+function application is \fIleft associative\fP.
+.PP
+\fIPartial application\fP: a function of two or more arguments
+can be applied to a smaller number of arguments and
+the result is a function that is waiting for the remaining arguments.
+For example
+.RS
+double = \'*\' 2
+.RE
+is a function that can be applied to a number and will multiply it by 2.
+.PP
+Partial application works because KRC uses a model of functions
+derived from \fIcombinatory logic\fP.  In this model, all functions
+actually take a single argument.  An n-ary function, for n>1, is a
+function that, when applied to its argument, returns an (n-1)ary
+function that is waiting for the next argument. So taking the case
+n=3 as an example
+.RS
+\fBf a b c\fP
+.RE
+means
+.RS
+\fB((f a) b) c\fP
+.RE
+but because of the left-associative rule the parentheses are normally omitted.
+.SH OPERATORS
+The following table lists KRC's prefix and infix operators in order of increasing binding
+power.
+.PP
+The second column gives associativity:- a left associative operator, e.g. `-' has
+.RS
+\fBa - b - c\fP \ ==> \ \fB(a - b) - c\fP
+.RE
+while a right associative operator, e.g. `++' has
+.RS
+\fBa ++ b ++ c\fP \ ==> \ \fBa ++ (b ++ c)\fP
+.RE
+Infix operators in the same row have the same binding power and are jointly
+right or left associative.
+.PP
+The third column gives a brief statement of meaning.
+Where needed the notes below add further detail.
+.TS
+l l l
+l l l.
+\fBoperator\fP	\fBassociativity\fP	\fBmeaning\fP
+:  ++  --	right	list prefix, append, listdiff
+|	right	logical \fIor\fP
+&	right	logical \fIand\fP
+\\	prefix	logical \fInot\fP
+> >= \\= == <= <	see below	comparisons
++ -	left	add, subtract
++ -	prefix	plus, minus
+* / %	left	multiply, integer divide, remainder
+** .	right	exponent, function-compose
+#	prefix	length of list
+.TE
+.PP
+The application of a function to its arguments binds more tightly
+than any operator.  Parentheses \fB(...)\fP can be inserted freely
+in expressions to enforce the intended parse or to make it clearer to the reader
+\- redundant parentheses do not change the meaning (this is true both in expressions
+and in formal parameters).
+.PP
+The operators \fB:\fP (prefix) and \fB++\fP
+(append) have been discussed earlier, in the section on DATA TYPES.
+The expression \fBx -- y\fP returns a list of the elements of \fBx\fP without
+those that appear in \fBy\fP, the exact definition is given by the 
+prelude function \fBlistdiff\fP.
+.PP
+The logical operators \fB|\fP, \fB&\fP do not evaluate their second operand
+if this is not needed.
+.RS
+\fBa\ |\ b\fP
+.RE
+returns "TRUE" if \fBa\fP is "TRUE", otherwise it returns \fBb\fP.
+Similarly
+.RS
+\fBa\ &\ b\fP
+.RE
+returns "FALSE" if \fBa\fP is "FALSE", otherwise it returns \fBb\fP.
+.PP
+The relational operators \fB>\fP, \fB>=\fP, \fB==\fP, \fB<=\fP, \fB<\fP have a special syntax which allows
+continued relations, as commonly used in mathematics books.  For example
+.RS
+\fB0 <= x <= 10\fP \ means \ \fB0 <= x & x <= 10\fP
+.br
+\fBa == b == c < 0\fP \ means \ \fBa == b & b == c & c < 0\fP
+.RE
+.PP
+The operators \fB==\fP and \fB\\=\fP can be used to test for equality or inequality
+on any pair of values, returning "TRUE" or "FALSE". Values of different types
+are always unequal.  Two lists count as equal if and only if they are of the
+same length and (recursively for sublists) corresponding elements are equal.
+.PP
+Equality tests between functions give unpredictable results and should 
+not be used.
+(Example: `\fBmap\ ==\ map\fP' has value "TRUE" but
+`\fBmap\ abs\ ==\ map\ abs\fP' is "FALSE".)
+.PP
+The order testing operators \fB> >= <= <\fP work on numbers in the usual way and
+on strings compare according to the C function \fIstrcmp()\fP.  For
+words all in upper case, or all in lower case, this amounts to dictionary order,
+but be aware that upper case letters
+precede lower case letters, so "ZEBRA"\ <\ "ant". It is an error to test
+lists or functions for order, or two values of different type.
+.PP
+\fB + - * /\fP are the usual arithmetic operations, with \fB%\fP for remainder.
+KRC arithmetic deals only with integers thus `\fB/\fP' discards the
+fractional part, rounding towards \fB0\fP, while
+\fBa % b\fP takes the remainder on dividing `\fBa\fP' by `\fBb\fP',
+the sign of the result being that of `\fBa\fP' (these rules
+for integer division and remainder are the same as C).
+.PP
+Prefix `\fB-\fP' reverses the sign of its integer operand (leaving \fB0\fP unchanged).
+A negative constant like `\fB-1\fP' is, syntactically, an operator
+expression and must be parenthesised when passed to a function, thus
+`\fBf(-1)\fP' whereas `\fBf\ -1\fP' would attempt to subtract \fB1\fP
+from \fBf\fP. Prefix `\fB+\fP' does nothing and is discarded.
+.PP
+\fBa ** b\fP raises `\fBa\fP' to the power of `\fBb\fP' which must be
+non-negative.
+.PP
+The composition of two functions `\fBf\ .\ g\fP' is defined as follows
+.RS
+\fB(f . g) x \ = \ f (g x)\fP
+.RE
+.PP
+The operator \fB#\fP gives the length of a list, for example `\fB#[1,2,3]\fP'
+is \fB3\fP.  To find the length of a string use the prelude function
+\fBprintwidth\fP.
+.PP
+A prefix or infix operator in \fIsingle quotes\fP denotes the corresponding one-
+or two-argument function.  For example \fB\(fm+\(fm\fP is the addition function
+and \fB\(fm#\(fm\fP and \fB\(fm\e\(fm\fP are functions
+which take the length of a list and the negation of a truthvalue.
+Note that \fB\(fm-\(fm\fP
+is subtraction, for unary minus you can use the prelude function \fBneg\fP.
+.SH ZF EXPRESSIONS
+ZF expressions are a notation to generate lists from other lists.
+(These would now called \fIlist comprehensions\fP, a
+term coined by Phil Wadler in 1985.)
+.PP
+We start with some simple examples
+.RS
+\fB{n*n; n<-[1..]}\fP
+.RE
+is a list of all square numbers [1,4,9,16,25...].  The expression before
+`;' is the \fIbody\fP of the ZF expression while `n<-[1..]' is called
+a \fIgenerator\fP and `n' is a local variable of the ZF expression.  The effect
+is to create a list of the values taken by the body for each value of `n'
+drawn from the list given in its generator.
+.PP
+The next example is a function for finding the factors of a number
+.RS
+\fBfactors n = {r; r<-[1..n/2]; n%r==0}\fP
+.RE
+This makes a list of the numbers between 1 and n/2 which divide n exactly.
+The expression after the second semicolon is called a \fIfilter\fP \- only
+those values of the generator are used for which the filter is "TRUE".
+.PP
+A ZF expression can have two or more generators, so
+.RS
+\fB{a+b; a<-[1,2,3]; b<-[10,20,30]}\fP
+.RE
+gives you a list of nine two-digit numbers.
+.PP
+Our last example finds
+all positions on a chess board which are a knight's move from [x,y]
+.RS
+\fBknights_move [x,y] = {[i,j]; i,j<-[1..8]; (i-x)**2 + (j-y)**2 == 5}\fP
+.RE
+Searching the whole board in this way is not very efficient, but never mind.
+Note that `i,j<-[1..8]' is shorthand for two generators with i, j
+both drawn from [1..8].
+.PP
+The general form of a ZF expression is
+.RS
+\fB{expression; qualifier; ... ; qualifier}\fP
+.br
+with one or more qualifiers, each of which is either a \fIgenerator\fP, of the form
+.br
+\ \ \ \ \ \ \ \ name-list <- expression
+.br
+or a \fIfilter\fP, which is an expression whose value is "TRUE" or "FALSE".
+.RE
+.PP
+If the first qualifier is a generator, which is usually the case,
+the initial `\fB;\fR' can be written `\fB|\fR', which aids readability.
+.PP
+For examples of programming with ZF expressions see
+David Turner's papers "The Semantic Elegance of Applicative Languages'' (1981)
+and "Recursion Equations as a Programming Language" (1982).
+.PP
+(\fBHistorical note\fR: The semantics of ZF expressions in KRC differ from
+those of modern list comprehensions
+in \fIinterleaving\fP outputs of multiple generators
+to ensure that all combinations are eventually reached,
+even with two or more infinite generators.  The motivation was to make them behave
+more like set comprehensions, whence the use of {}.  List comprehensions
+with square brackets and the now familiar "nested loop" semantics first appeared
+in Miranda, in 1984.)
+.SH THE PRELUDE
+When KRC is started it first loads the \fBprelude\fP, a library of standard definitions,
+most of which are in KRC but some are in machine code, including functions to access
+the operating system (e.g. \fBread\fP, \fBwrite\fP).
+.PP
+To list the names defined in the currently loaded prelude during a KRC session, type
+.RS
+\fB/lib\fP
+.RE
+You can inspect any of the definitions by typing the name, e.g.
+.RS
+\fBmap\fP
+.RE
+Each has an comment explaining what it does, in addition to its defining equations.
+.PP
+The standard prelude is usually at \fB/usr/lib/krc/prelude\fP but may be placed
+elsewhere by the installer. To view the standard prelude in a KRC session, say
+"\fB/help prelude\fP".
+.PP
+Another library in place of the standard prelude can be specified 
+on the command line when KRC is invoked by the option \fB-l \fIlib\fR.
+If you invoke KRC with option \fB-n\fP, no prelude is loaded.\"\fBchar__ chr__ explode__ function__ implode__ list__ number__ ord__ printwidth__ read__ seq__ string__ write__\fP
+.PP
+If KRC is invoked with option \fB-L\fR, a legacy prelude
+is used in place of the standard one. To view this in a KRC session, say
+"\fB/help lib1981\fP".
+.PP
+Note that without a prelude you cannot use ZF expressions,
+whose implementation requires \fBinterleave\fP
+nor can you use the `\fB--\fP' operator, which
+requires the function \fBlistdiff\fP.
+.SH LINE EDITING AND ESCAPE TO UNIX SHELL
+\fBLine editing\fP: if KRC is compiled with the "linenoise" module,
+the arrow keys and other keys can be used to scroll back and forth through
+lines typed in a KRC session, to edit and resubmit them.
+For a summary of available key bindings, with and without "linenoise",
+say \fB/help keys\fP in a KRC session.
+.PP
+\fBEscape to Unix shell\fP:
+type Ctrl-Z to suspend KRC and return to Unix command line,
+say \fBfg\fP to resume the KRC session.
+.SH MAKING UNIX COMMANDS
+You can write a Unix command in KRC by making its script
+executable through the "magic string" mechanism. To do this,
+add a line as the start of the script, of the form:
+.RS
+#! /usr/bin/krc -e \fIexpression\fP!
+.RE
+where \fIexpression\fP is to be evaluated when
+the program is run.  This can be a KRC expression
+of any complexity, terminated by `\fB?\fP' if its value is to be shown
+with its structure or `\fB!\fP' if it is to be flat-printed.
+.PP
+Other flags such as "\fB\-l\ \fIlib\fR" for an alternative prelude,
+"\fB\-h\ \fIsize\fR" for a larger heap, can precede "\fB-e\fP".
+.PP
+The name by which the script is called, followed by the command-line arguments
+that the user supplies when it is run,
+are placed in a list of strings called "\fBargv\fP".
+.PP
+Example: A simple command to display the contents of files.
+Put the following 2 lines in a file called "list".
+.RS
+ #! /usr/bin/krc -e main!
+.br
+ main = map read (tl argv)
+.RE
+then make it executable
+.RS
+ chmod +x list
+.RE
+now you can use it, for example
+.RS
+ ./list list
+.RE
+will display the contents of the file itself.
+.PP
+Any KRC script can be made executable by placing a "magic string" at the start.
+When used as the script in an interactive KRC session an initial line in `#!'
+is treated as a comment and ignored; it has effect only if the file is invoked
+as a command on the Unix command line.
+.SH LANGUAGE CHANGES
+The KRC language described here is as David Turner designed it around 1980,
+except for the following changes.
+.PP
+The base for indexing lists has been changed from \fB1\fR to \fB0\fR.
+The option \fB-z\fP reverts to lists being indexed from 1 (this may be
+needed for legacy KRC scripts dating from the 1980's).
+.PP
+A revised prelude has been provided, with some more efficient definitions
+(e.g. \fBreverse\fR, \fBsort\fP) and a more modern collection
+of functions.
+A legacy prelude from 1981
+is also available (option \fB-L\fP).
+.PP
+Escape characters in strings, "\\n" etc., as in C, have been added.
+KRC as originally designed used instead names for special characters: \fBnl\fP
+\fBnp\fP \fBquote\fP \fBtab\fP \fBvt\fP,
+these remain in the prelude.  Example:
+instead of \fB"123\\tgo\\n"\fP you can say \fB["123",tab,"go",nl]\fP
+to get the same effect with ``!''.
+.PP
+A distinction has been introduced between `\fB=\fP', definitional equals
+and `\fB==\fP' the equality test (KRC originally used `\fB=\fP' for both).
+.PP
+In-line comments, from "||" to end of line, have been added, thus
+.RS
+        || this is a comment
+.RE
+these don't fit very naturally with KRC's model  of  interactive  script
+development  as  they  are  discarded  when  entered  during a
+session.  But the facility is useful for scripts prepared  with  an  editor  as
+it allows comments on individual equations and on the whole script.
+.SH LEGACY SYNTAX
+With option \fB-z\fP these alternative operator forms are accepted
+and converted to their standard variants:
+.RS
+\fB~\fR  as a synonym for \fB\e\fR (prefix \fInot\fR)
+.br
+\fB~=\fR as a synonym for \fB\e=\fR (\fInot-equals\fR)
+.br
+\fB=\fR as a synonym for \fB==\fR (\fIequality test\fR)
+.RE
+.SH LIMITATIONS
+Guards do not work correctly with simple definitions, for example
+.RS
+feb = 29, leap_year
+.br
+\ \ \ \ = 28
+.RE
+fails with strange error when leap_year="FALSE".
+The language as originally defined did not allow guards with simple
+definitions, only with functions.  The syntactic restriction has been removed
+but the corresponding semantics still needs fixing.
+.PP
+The length of a string limited to 255 characters.
+The space used by strings created during a session is never freed,
+mitigated only by the fact that multiple copies of the same
+string are shared. This means that programs which create a
+lot of temporary strings as part of their operation
+will soon run out of the space in which strings,
+identifiers, file names and comments are stored.  Note, however,
+that KRC's ``\fB!\fP'' output mode removes much of the need to create
+temporary strings.
+.PP
+Numbers are limited in range to that of the underlying processor's
+machine word, i.e. they are signed 32-bit or 64-bit integers.
+Calculations which exceed this range cause a run-time error.
+.PP
+If linenoise is enabled, multiline comments cannot be entered interactively
+in a KRC session.
+.SH FILES
+.TP
+\fB/usr/lib/krc/prelude\fP
+The standard prelude.
+.TP
+\fB/usr/lib/krc/lib1981\fP
+A legacy prelude dating from 1981 (invoked by option -L).
+.PP
+KRC looks for the prelude first in \fB./krclib\fP if present,
+then in \fB/usr/lib/krc\fP (this may be changed by the installer).
+.SH SEE ALSO
+.TP
+\fBhttp://krc-lang.org/\fP
+The KRC home page.
+.TP
+\fBRecursion Equations as a Programming Language\fP, D. A. Turner, January 1982
+This includes an overview of the KRC language and can be found at the above website.
+.TP
+\fBhttp://github.com/antirez/linenoise\fP
+The "linenoise" line-editing module (the version included with the KRC sources has
+been lightly edited to configure it appropriately).
+.SH AUTHOR
+The KRC system was designed by David Turner
+who implemented it in BCPL for the EMAS operating system from
+November 1979 to October 1981.
+.PP
+This implementation was created by translating the original BCPL sources into C for
+the Unix family of operating systems.
+.PP
+KRC is Copyright (c) D. A. Turner 1981 and is released under an open source license,
+for terms see the file "COPYING" included in the distribution.

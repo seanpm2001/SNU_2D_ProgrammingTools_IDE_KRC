@@ -1,0 +1,824 @@
+||THE FOLLOWING DIRECTIVE MAKES "KRC" AN EMAS COMMAND FOR RUNNING
+||THIS PROGRAM
+SECTION "KRC"
+
+
+GET "KRC_LISTPACK"
+.
+
+GET "KRC_LEX"
+.
+GET "KRC_COMPILER"
+.
+GET "KRC_REDUCER"
+.
+
+GET "LIBHDR"
+GET "KRC_LISTHDR"
+GET "KRC_COMPHDR"
+GET "KRC_REDHDR"
+
+||----------------------------------------------------------------------
+||The KRC system is Copyright (c) D. A. Turner 1981
+||All  rights reserved.  It is distributed as free software under the
+||terms in the file "COPYING", which is included in the distribution.
+||----------------------------------------------------------------------
+
+STATIC $( COMMANDS=NIL; SCRIPT=NIL; LASTFILE=NIL;OUTFILES=NIL || BASES
+          LIBSCRIPT=NIL; HOLDSCRIPT=NIL; GET.HITS=NIL ||BASES
+          SIGNOFF=FALSE; SAVED=TRUE; EVALUATING=FALSE
+          NILPROMPT=#X01000000  || AN EMAS KLUDGE, SORRY
+          ATOBJECT=FALSE; ATCOUNT=FALSE ||FLAGS USED IN DEBUGGING SYSTEM
+          PARAMV=0
+       $)
+
+|| INITIALISATION AND STEERING
+
+LET GO()
+BE $( STATIC $( LEV=?; LL=? $)
+      LET ESCAPETONEXTCOMMAND()
+      BE $(
+            WRCH:=TRUEWRCH
+            IF INPUT()\=SYSIN DO $( ENDREAD() ; SELECTINPUT(SYSIN)  $)
+            CLOSECHANNELS()
+            IF EVALUATING
+            DO $( IF ATCOUNT DO OUTSTATS()
+                  CLEARMEMORY() ||IN CASE SOME POINTERS HAVE BEEN LEFT REVERSED
+                  EVALUATING:=FALSE  $)
+            IF HOLDSCRIPT\=NIL 
+            DO $( SCRIPT,HOLDSCRIPT := HOLDSCRIPT,NIL
+                  CHECK.HITS() $)
+            ENVP,CODEP:= -1,-1
+            ARGP:= ARG-1
+            LONGJUMP(LEV,LL)  $)
+      LET V1=VEC 100
+      LET V2=VEC 300
+      LET V3=VEC 20000
+      LET V4=VEC 255/BYTESPERWORD  ||FOR CALLING EMAS
+      STACKLIMIT:= @V4 + 30000  ||IMPLEMENTATION DEPENDENT,TO TEST FOR RUNAWAY RECURSION
+      LL:=L
+      ENV,CODEV:=V1,V2
+      ARGMAX:=V3+20000
+      PARAMV:=V4
+      LEV:=LEVEL()
+      TRUEWRCH:=WRCH
+      FILECOMMANDS:= NIL
+      MEMORIES,LASTFILE:=NIL,NIL
+      TOKENS,THE.ID,THE.CONST := NIL,NIL,NIL
+      UPPERCASE:= HAVEPARAM('U')
+      ENVP,CODEP:=-1,-1
+      ARG,ARGP:=V3,V3-1
+      INITIALISE()
+   L: UNTIL SIGNOFF DO COMMAND()
+   $)
+
+AND INITIALISE()
+BE $( SETUP.INFIXES()
+      SETUP.PRIMFNS.ETC()
+      TEST HAVEPARAM('L') ||PARAMETER "L" LOADS (FULL) LIBRARY IN PLACE OF PRELUDE
+      THEN GETFILE("CUR057.KRCLIB") OR
+      TEST HAVEPARAM('N') ||PARAMETER "N" SWITCHES OFF PRELUDE
+      THEN WRITES("*"PRELUDE*" suppressed*N")
+      OR GETFILE("CUR057.PRELUDE")
+      LIBSCRIPT,SCRIPT:= SORT(SCRIPT),NIL
+      SAVED,LASTFILE,LASTLHS:= TRUE,NIL,NIL
+      SETUP.COMMANDS()
+      RELEASE.INTERRUPTS()
+      WRITEF("Hello from %S*N",TITLE())
+   $)
+
+AND TITLE() = "*"Kent Recursive Calculator*" (Mark 1.0)"
+
+AND SPACE.ERROR()
+BE TEST EVALUATING
+   THEN $( LET S = ARGP+20>ARGMAX|@S>STACKLIMIT-> "Stack overflow", "Space exhausted"
+           WRITEF("*N%S - evaluation abandoned*N",S)
+           ESCAPETONEXTCOMMAND()  $) OR
+   TEST MEMORIES=NIL
+   THEN
+   $( WRITES("*NSpace Exhausted - recovery impossible*N")
+      FINISH  $)
+   OR CLEARMEMORY()  ||LET GO OF MEMOS AND TRY TO CARRY ON
+
+AND BASES(F)
+BE $(
+      F(@COMMANDS)
+      F(@FILECOMMANDS)
+      F(@SCRIPT)
+      F(@LIBSCRIPT)
+      F(@HOLDSCRIPT)
+      F(@GET.HITS)
+      F(@LASTFILE)
+      F(@OUTFILES)
+      F(@MEMORIES)
+      F(@S)
+      F(@TOKENS)
+      F(@THE.ID)
+      F(@THE.CONST)
+      FOR P= ARGP+1 TO ARGMAX DO !P:=0  ||CLEAR JUNK FROM ARGSTACK
+      F(@LASTLHS)
+      F(@TRUTH)
+      F(@FALSITY)
+      F(@INFINITY)
+   $)
+
+AND SETUP.COMMANDS()
+BE $( LET F(S,R)
+      BE COMMANDS:= CONS(CONS(MKATOM(S),R),COMMANDS)
+        || N.B. ASSUMES IT IS SAFE TO STORE A ROUTINE ADDRESS IN A LIST
+        || FIELD
+      AND FF(S,R)
+      BE $( FILECOMMANDS:= CONS(MKATOM(S),FILECOMMANDS) ; F(S,R)  $)
+
+      F("delete",DELETECOM)
+      F("d",DELETECOM) ||SYNONYM
+      F("reorder",REORDERCOM)
+      FF("save",SAVECOM)
+      FF("get",GETCOM)
+      FF("list",LISTCOM)
+      FF("file",FILECOM)
+      FF("f",FILECOM)
+      F("files",FILESCOM)
+      FF("analyse",ANALYSECOM)
+      F("quit",QUITCOM)
+      F("q",QUITCOM) ||SYNONYM
+      F("names",NAMESCOM)
+      F("lib",LIBCOM)
+      F("aborder",ABORDERCOM)
+      F("rename",RENAMECOM)
+      F("openlib",OPENLIBCOM)
+      F("clear",CLEARCOM)
+      F("object",OBJECTCOM)  ||THESE LAST COMMANDS ARE FOR USE IN
+      F("reset",RESETCOM)    ||DEBUGGING THE SYSTEM
+      F("gc",GCCOM)
+      F("count",COUNTCOM)
+      F("lpm",LISTPM)
+   $)
+
+AND MAKEPARAM(N,A,B,C,D,E)  ||SYSTEM DEPENDENT, FOR CALLING EMAS
+BE $( LET A=@N  ||LEAVES RESULT IN "PARAMV"
+      LET L=0
+      FOR I=1 TO N
+      DO $( IF I>1 DO $( L:=L+1 ; PUTBYTE(PARAMV,L,',') $)
+            FOR J=1 TO GETBYTE(A!I,0)
+            DO PUTBYTE(PARAMV,L+J,GETBYTE(A!I,J))
+            L:=L+GETBYTE(A!I,0)  $)
+      PUTBYTE(PARAMV,0,L)
+   $)
+
+AND DESCRIPTOR() = #X18000100
+
+AND FILESCOM()  ||EMAS SPECIFIC
+BE $( EXTERNAL $( FILES  $)
+      CHECK(EOL)
+      IF ERRORFLAG RETURN
+      MAKEPARAM(0)
+      FILES(DESCRIPTOR(),PARAMV<<2)
+   $)
+
+AND ANALYSECOM()  ||EMAS SPECIFIC
+BE $( EXTERNAL $( ANALYSE  $)
+      TEST HAVEID() & HAVE(EOL)
+      THEN  $( MAKEPARAM(1,PRINTNAME(THE.ID)) 
+               ANALYSE(DESCRIPTOR(),PARAMV<<2)  $)
+      OR SYNTAX()
+   $)
+
+AND CLOSECHANNELS()
+BE $( IF \EVALUATING & OUTPUT()\=SYSOUT DO ENDWRITE()
+      UNTIL OUTFILES=NIL
+      DO $( SELECTOUTPUT(TL!(HD!OUTFILES))
+            NEWLINE()
+            ENDWRITE()
+            OUTFILES:=TL!OUTFILES $)
+      SELECTOUTPUT(SYSOUT)
+   $)
+
+AND FINDCHANNEL(F) = VALOF
+$( LET P=OUTFILES
+   UNTIL P=NIL | HD!(HD!P)=F
+   DO P:= TL!P
+   TEST P=NIL
+   THEN $( LET OUT = FINDOUTPUT(F)
+           IF OUT>0
+           DO OUTFILES:=CONS(CONS(F,OUT),OUTFILES)
+           RESULTIS OUT $)
+   OR RESULTIS TL!(HD!P)
+$)
+
+|| COMMAND INTERPRETER
+|| EACH COMMAND IS TERMINATED BY A NEWLINE
+|| <COMMAND>::= /<EMPTY> |    (DISPLAYS WHOLE SCRIPT)
+||              /DELETE <THINGY>* |   
+||                  (IF NO <THINGY>'S SPECIFIED DELETES WHOLE SCRIPT)
+||              /DELETE <NAME> <PART>* |
+||              /REORDER <THINGY>* |
+||              /REORDER <NAME> <PART>* |
+||              /ABORDER |
+||              /SAVE "<FILENAME>" |
+||              /GET "<FILENAME>" |
+||              /LIST "<FILENAME>" |
+||              /FILE  |
+||              /QUIT  |
+||              /NAMES |
+||              /OPENLIB |
+||              /CLEAR |
+||              /LIB   |
+||              <NAME> |     (DISPLAYS EQNS FOR THIS NAME)
+||              <NAME> .. <NAME> |    (DISPLAYS A SECTION OF THE SCRIPT)
+||              <EXP>? |     (EVALUATE AND PRINT)
+||              <EXP>! |     (SAME BUT WITH UNFORMATTED PRINTING)
+||              <EQUATION>    (ADD TO SCRIPT)
+|| <THINGY> ::= <NAME> | <NAME> .. <NAME> | <NAME> ..
+|| <PART> ::= <INT> | <INT>..<INT> | <INT>..
+
+AND COMMAND()
+BE $( PROMPT(">") || ON EMAS PROMPTS REMAIN IN EFFECT UNTIL CANCELLED
+      READLINE() 
+      SUPPRESSPROMPTS()  || CANCEL PROMPT (IN CASE COMMAND READS DATA)
+      TEST HAVE('/')
+      THEN TEST HAVE(EOL)
+           THEN DISPLAYALL(FALSE) OR
+           TEST HAVE('@') & HAVE(EOL)
+           THEN LISTPM()  ||FOR DEBUGGING THE SYSTEM
+           OR $( LET P=COMMANDS
+                 TEST HAVEID()
+                 THEN THE.ID:= MKATOM(SCASECONV(PRINTNAME(THE.ID)))
+                    ||ALWAYS ACCEPT COMMANDS IN EITHER CASE
+                 OR P:= NIL
+                 UNTIL P=NIL | THE.ID=HD!(HD!P) DO P:= TL!P
+                 TEST P=NIL
+                 THEN WRITES("Unknown command - ignored*N")
+                 OR (TL!(HD!P))()    || SEE "SETUP.COMMANDS()"
+              $) OR
+      TEST COMMENTFLAG THEN COMMENT() OR
+      TEST EXPFLAG THEN EVALUATION() OR
+      TEST EQNFLAG THEN NEWEQUATION()
+      OR DISPLAYCOM()
+      IF ERRORFLAG DO WRITES("eh?*N")
+   $)
+
+AND SUPPRESSPROMPTS()
+BE PROMPT(@NILPROMPT)
+
+AND DISPLAYCOM()
+BE TEST HAVEID()
+   THEN TEST HAVE(EOL)
+        THEN DISPLAY(THE.ID,TRUE,FALSE) OR
+        TEST HAVE(DOTDOT.SY)
+        THEN $( LET A,X = THE.ID,NIL
+                LET B = HAVE(EOL) -> EOL,
+                        HAVEID()&HAVE(EOL) -> THE.ID,
+                        0
+                TEST B=0 THEN SYNTAX()
+                OR X:= EXTRACT(A,B)
+                UNTIL X=NIL
+                DO $( DISPLAY(HD!X,FALSE,FALSE) 
+                      X:=TL!X  $)  $) ||could insert extra line here between groups
+        OR SYNTAX()
+   OR SYNTAX()
+
+AND DISPLAYALL(DOUBLESPACING)  || "SCRIPT" IS A LIST OF ALL USER DEFINED
+                  || NAMES IN ALPHABETICAL ORDER
+BE $( LET P=SCRIPT
+      IF P=NIL DO WRITES("Script=empty*N")
+      UNTIL P=NIL DO $( DISPLAY(HD!P,FALSE,DOUBLESPACING) ; P:= TL!P  $)
+ ||could insert extra newline here between groups
+   $)
+
+AND QUITCOM()
+BE $( CHECK(EOL)
+      IF ERRORFLAG RETURN
+      IF MAKESURE()
+      DO $( WRITEF("Goodbye from %S*N",TITLE())
+              SIGNOFF:= TRUE  $)
+   $)
+
+AND MAKESURE() = VALOF
+$( IF SAVED | SCRIPT=NIL RESULTIS TRUE
+   PROMPT("Are you sure? ")
+$( LET CH=RDCH()
+   UNRDCH()
+   UNTIL RDCH()='*N' LOOP
+   IF CH='y' | CH='Y' RESULTIS TRUE
+   WRITES("Command ignored*N")
+   RESULTIS FALSE
+$) $)
+
+AND OBJECTCOM()
+BE ATOBJECT:=TRUE
+
+AND RESETCOM()
+BE ATOBJECT,ATGC,ATCOUNT:=FALSE,FALSE,FALSE
+
+AND GCCOM()
+BE $( ATGC:=TRUE 
+      FORCE.GC()  $)
+
+AND COUNTCOM()
+BE ATCOUNT:=TRUE
+
+AND SAVECOM()
+BE $( FILENAME()
+      IF ERRORFLAG RETURN
+      IF SCRIPT=NIL
+      DO $( WRITES("Cannot save empty script*N")
+            RETURN  $)
+   $( LET FILE = PRINTNAME(THE.ID)
+      EXTERNAL $( COPY  $)
+      LET OUT = FINDOUTPUT("T#SCRIPT")
+      SELECTOUTPUT(OUT)
+      DISPLAYALL(TRUE)
+      ENDWRITE()
+      SAVED:=TRUE
+      SELECTOUTPUT(SYSOUT)
+      MAKEPARAM(2,"T#SCRIPT",FILE)
+      COPY(DESCRIPTOR(),PARAMV<<2)  $) $)
+
+AND FILENAME()
+BE TEST HAVE(EOL)
+   THEN TEST LASTFILE=NIL
+        THEN $( WRITES("(No file set)*N") ; SYNTAX()  $)
+        OR THE.ID:= LASTFILE
+   OR TEST HAVEID() & HAVE(EOL)
+      THEN LASTFILE:= THE.ID
+      OR $( IF HAVECONST() & HAVE(EOL) & \ISNUM(THE.CONST)
+            DO WRITES("(Warning - quotation marks no longer expected around filenemes in file commands - DT, Nov 81)*N")
+            SYNTAX() $)
+
+AND FILECOM()
+BE TEST HAVE(EOL)
+   THEN TEST LASTFILE=NIL
+        THEN WRITES("No files used*N")
+        OR WRITEF("File = %S*N",PRINTNAME(LASTFILE))
+   OR FILENAME()
+
+AND OKFILE(STR,FILE) = VALOF
+$( IF STR>=0 RESULTIS TRUE
+|| WRITEF("Cannot open *"%S*" (FD=%X8)*N",FILE,STR)
+   WRITEF("Cannot open *"%S*"*N",FILE,STR)
+   RESULTIS FALSE $)
+
+AND GETCOM()
+BE $( LET CLEAN = SCRIPT=NIL
+      FILENAME()
+      IF ERRORFLAG RETURN
+      HOLDSCRIPT,SCRIPT,GET.HITS := SCRIPT,NIL,NIL
+      GETFILE(PRINTNAME(THE.ID))
+      CHECK.HITS()
+      SCRIPT,SAVED,HOLDSCRIPT := APPEND(HOLDSCRIPT,SCRIPT),CLEAN,NIL
+   $)
+
+AND CHECK.HITS()
+BE UNLESS GET.HITS=NIL
+   DO $( WRITES("Warning - /get has overwritten or modified:*N")
+         SCRIPTLIST(REVERSE(GET.HITS))
+         GET.HITS:= NIL  $)
+
+AND GETFILE(FILE)
+BE $( LET IN = FINDINPUT(FILE)
+      UNLESS OKFILE(IN,FILE) RETURN
+      SELECTINPUT(IN)
+      $( READLINE()
+         IF HD!TOKENS=ENDSTREAMCH
+         BREAK
+         TEST COMMENTFLAG THEN COMMENT()
+         OR NEWEQUATION()
+         IF ERRORFLAG DO WRITES("eh?*N")
+      $) REPEAT
+      ENDREAD()
+      SELECTINPUT(SYSIN)  $)
+
+AND LISTCOM()
+BE $( FILENAME()
+      IF ERRORFLAG RETURN
+   $( LET FILE=PRINTNAME(THE.ID)
+      LET IN=FINDINPUT(FILE)
+      UNLESS OKFILE(IN,FILE) RETURN
+      SELECTINPUT(IN)
+   $( LET CH=RDCH()
+      UNTIL CH=ENDSTREAMCH
+      DO  $( WRCH(CH) ; CH:=RDCH()  $)
+      ENDREAD()
+      SELECTINPUT(SYSIN)
+         $) $) $)
+
+AND STALL(S)
+BE WRITEF("*"/%S*" not yet implemented*N",S)
+
+
+AND NAMESCOM()
+BE $( CHECK(EOL)
+      IF ERRORFLAG RETURN
+      TEST SCRIPT=NIL
+      THEN DISPLAYALL(FALSE)
+      OR  $( SCRIPTLIST(SCRIPT) ; FIND.UNDEFS()  $)
+   $)
+
+AND FIND.UNDEFS()  ||SEARCHES THE SCRIPT FOR NAMES USED BUT NOT DEFINED
+BE $( LET S,UNDEFS = SCRIPT,NIL
+      UNTIL S=NIL
+      DO $( LET EQNS = TL!(VAL!(HD!S))
+            UNTIL EQNS=NIL
+            DO $( LET CODE = TL!(HD!EQNS)
+                  WHILE ISCONS(CODE)
+                  DO $( LET A = HD!CODE
+                        IF ISATOM(A) & \ISDEFINED(A) & \MEMBER(UNDEFS,A)
+                        DO UNDEFS:= CONS(A,UNDEFS)
+                        CODE:= TL!CODE  $)
+                  EQNS:= TL!EQNS  $)
+            S:= TL!S  $)
+      UNLESS UNDEFS=NIL
+      DO $( WRITES("*NNames used but not defined:*N")
+            SCRIPTLIST(REVERSE(UNDEFS))  $)
+   $)
+
+AND ISDEFINED(X) =
+    VAL!X=NIL|TL!(VAL!X)=NIL -> FALSE,TRUE
+
+AND LIBCOM()
+BE $( CHECK(EOL)
+      IF ERRORFLAG RETURN
+      TEST LIBSCRIPT=NIL
+      THEN WRITES("library = empty*N")
+      OR SCRIPTLIST(LIBSCRIPT)  $)
+ 
+AND CLEARCOM()
+BE $( CHECK(EOL)
+      IF ERRORFLAG RETURN
+      CLEARMEMORY()  $)
+
+AND SCRIPTLIST(S)
+BE $( LET COL,I = 0,0
+      MANIFEST $( LINEWIDTH=68 $)  ||THE MINIMUM OF VARIOUS DEVICES
+      UNTIL S=NIL
+      DO $( LET N = PRINTNAME(HD!S)
+            COL:= COL+GETBYTE(N,0)+1
+            IF COL>LINEWIDTH
+            DO  $( COL:=0 ; NEWLINE()  $)
+            WRITES(N)
+            WRCH(' ')
+            I,S := I+1,TL!S  $)
+      IF COL+6>LINEWIDTH DO NEWLINE()
+      WRITEF(" (%N)*N",I)
+   $)
+
+AND OPENLIBCOM()
+BE $( CHECK(EOL)
+      IF ERRORFLAG RETURN
+      SAVED,SCRIPT,LIBSCRIPT:= SCRIPT=NIL,APPEND(SCRIPT,LIBSCRIPT),NIL
+   $)
+
+AND RENAMECOM()
+BE $( LET X,Y,Z = NIL,NIL,NIL
+      WHILE HAVEID() DO X:= CONS(THE.ID,X)
+      CHECK(',')
+      WHILE HAVEID() DO Y:= CONS(THE.ID,Y)
+      CHECK(EOL)
+      IF ERRORFLAG RETURN
+      $( ||FIRST CHECK LISTS ARE OF SAME LENGTH
+         LET X1,Y1 = X,Y
+         UNTIL X1=NIL|Y1=NIL DO Z,X1,Y1:= CONS(CONS(HD!X1,HD!Y1),Z),TL!X1,TL!Y1
+         UNLESS X1=Y1=NIL & Z\=NIL DO  $( SYNTAX() ; RETURN  $)  $)
+      $( || NOW CHECK LEGALITY OF RENAME
+         LET Z1,POSTDEFS,DUPS = Z,NIL,NIL
+         UNTIL Z1=NIL
+         DO $( IF MEMBER(SCRIPT,HD!(HD!Z1))
+               DO POSTDEFS:= CONS(TL!(HD!Z1),POSTDEFS)
+               IF ISDEFINED(TL!(HD!Z1)) & (\MEMBER(X,TL!(HD!Z1)) | \MEMBER(SCRIPT,TL!(HD!Z1)) )
+               DO POSTDEFS:= CONS(TL!(HD!Z1),POSTDEFS)
+               Z1:= TL!Z1  $)
+         UNTIL POSTDEFS=NIL
+         DO $( IF MEMBER(TL!POSTDEFS,HD!POSTDEFS) &
+                 \MEMBER(DUPS,HD!POSTDEFS) DO DUPS:= CONS(HD!POSTDEFS,DUPS)
+               POSTDEFS:= TL!POSTDEFS $)
+         UNLESS DUPS=NIL
+         DO $( WRITES("/rename illegal because of conflicting uses of ")
+               UNTIL DUPS=NIL
+               DO  $( WRITES(PRINTNAME(HD!DUPS)) 
+                      WRCH(' ') 
+                      DUPS:= TL!DUPS  $)
+               NEWLINE()
+               RETURN  $)  $)
+      HOLD.INTERRUPTS()
+      CLEARMEMORY()
+    ||PREPARE FOR ASSIGNMENT TO VAL FIELDS
+   $( LET X1,XVALS,TARGETS = X,NIL,NIL
+      UNTIL X1=NIL
+      DO $( IF MEMBER(SCRIPT,HD!X1)
+            DO XVALS,TARGETS := CONS(VAL!(HD!X1),XVALS),CONS(HD!Y,TARGETS)
+            X1,Y := TL!X1,TL!Y  $)
+      ||NOW CONVERT ALL OCCURRENCES IN THE SCRIPT
+   $( LET S=SCRIPT
+      UNTIL S=NIL
+      DO $( LET EQNS = TL!(VAL!(HD!S))
+            LET NARGS = HD!(HD!(VAL!(HD!S)))
+            UNTIL EQNS=NIL
+            DO $( LET CODE = TL!(HD!EQNS)
+                  IF NARGS>0
+                  DO $( LET LHS = HD!(HD!EQNS)
+                        FOR I=2 TO NARGS
+                        DO LHS:= HD!LHS
+                        HD!LHS:= SUBST(Z,HD!LHS) $)
+                  WHILE ISCONS(CODE)
+                  DO HD!CODE,CODE := SUBST(Z,HD!CODE),TL!CODE
+                  EQNS:= TL!EQNS  $)
+            IF MEMBER(X,HD!S) DO VAL!(HD!S):= NIL
+            HD!S:= SUBST(Z,HD!S)
+            S:= TL!S  $)
+      ||NOW REASSIGN VAL FIELDS
+      UNTIL TARGETS=NIL
+      DO $( VAL!(HD!TARGETS):= HD!XVALS
+            TARGETS,XVALS := TL!TARGETS,TL!XVALS  $)
+      RELEASE.INTERRUPTS()
+   $) $) $)
+
+AND SUBST(Z,A) = VALOF
+$( UNTIL Z=NIL
+   DO $( IF A=HD!(HD!Z)
+         DO  $( SAVED:= FALSE ; RESULTIS TL!(HD!Z)  $)
+         Z:= TL!Z $)
+   RESULTIS A  $)
+
+AND NEWEQUATION()
+BE $( LET EQNO = -1
+      IF HAVENUM()
+      DO $( EQNO:=100*THE.NUM+THE.DECIMALS
+            CHECK(')')  $)
+   $( LET X=EQUATION()
+      IF ERRORFLAG RETURN
+   $( LET SUBJECT,NARGS,EQN=HD!X,HD!(TL!X),TL!(TL!X)
+      IF ATOBJECT DO  $( PRINTOB(EQN) ; NEWLINE()  $)
+      TEST VAL!SUBJECT=NIL
+      THEN $( VAL!SUBJECT:=CONS(CONS(NARGS,NIL),CONS(EQN,NIL))
+              ENTERSCRIPT(SUBJECT)  $) OR
+      TEST PROTECTED(SUBJECT)
+      THEN RETURN OR
+      TEST TL!(VAL!SUBJECT)=NIL  ||SUBJECT CURRENTLY DEFINED ONLY BY A COMMENT
+      THEN $( HD!(HD!(VAL!SUBJECT)):= NARGS
+              TL!(VAL!SUBJECT):= CONS(EQN,NIL)  $) OR
+      TEST NARGS=0
+      THEN $( VAL!SUBJECT:=CONS(CONS(0,TL!(HD!(VAL!SUBJECT))),CONS(EQN,NIL)) ; CLEARMEMORY() $) OR
+           ||SILENTLY OVERWRITING EXISTING EQNS
+      TEST NARGS\=HD!(HD!(VAL!SUBJECT))
+      THEN $( WRITEF("Wrong no of args for *"%S*"*N",PRINTNAME(SUBJECT))
+              WRITES("Equation rejected*N")
+              RETURN  $) OR
+      TEST EQNO=-1  ||UNNUMBERED EQN
+      THEN $( LET EQNS=TL!(VAL!SUBJECT)
+              LET P = PROFILE(EQN)
+              $( IF EQUAL(P,PROFILE(HD!EQNS))
+                 DO $( LET CODE=TL!(HD!EQNS)
+                       TEST HD!CODE=LINENO.C ||IF OLD EQN HAS LINE NO,
+                       THEN $( TL!(TL!CODE):=TL!EQN  ||NEW EQN INHERITS
+                               HD!(HD!EQNS):=HD!EQN  $)
+                       OR HD!EQNS:=EQN
+                       CLEARMEMORY()
+                       BREAK  $)
+                 IF TL!EQNS=NIL
+                 DO $( TL!EQNS:=CONS(EQN,NIL)
+                       BREAK  $)
+                 EQNS:=TL!EQNS
+              $) REPEAT
+           $) 
+      OR $( LET EQNS = TL!(VAL!SUBJECT)  ||NUMBERED EQN
+            LET N = 0
+            IF EQNO REM 100\=0 | EQNO=0 ||IF EQN HAS NON STANDARD LINENO
+            DO TL!EQN:=CONS(LINENO.C,CONS(EQNO,TL!EQN)) ||MARK WITH NO.
+            $( N:= HD!(TL!(HD!EQNS))=LINENO.C -> HD!(TL!(TL!(HD!EQNS))),
+                   (N/100+1)*100
+               IF EQNO=N
+               DO $( HD!EQNS:=EQN
+                     CLEARMEMORY()
+                     BREAK  $)
+               IF EQNO<N
+               DO $( LET HOLD=HD!EQNS
+                     HD!EQNS:=EQN
+                     TL!EQNS:=CONS(HOLD,TL!EQNS)
+                     CLEARMEMORY()
+                     BREAK  $)
+               IF TL!EQNS=NIL
+               DO $( TL!EQNS:=CONS(EQN,NIL)
+                     BREAK  $)
+               EQNS:=TL!EQNS
+            $) REPEAT
+         $) 
+      SAVED:=FALSE
+   $) $) $)
+
+AND CLEARMEMORY() ||CALLED WHENEVER EQNS ARE DESTROYED,REORDERED OR
+    ||INSERTED (OTHER THAN AT THE END OF A DEFINITION)
+BE UNTIL MEMORIES=NIL ||MEMORIES HOLDS A LIST OF ALL VARS WHOSE MEMO
+   DO $( LET X=VAL!(HD!MEMORIES)  ||FIELDS HAVE BEEN SET
+         UNLESS X=NIL DO HD!(HD!(TL!X)):=0 ||UNSET MEMO FIELD
+         MEMORIES:=TL!MEMORIES  $)
+
+AND ENTERSCRIPT(A)    ||ENTERS "A" IN THE SCRIPT
+BE TEST SCRIPT=NIL
+   THEN SCRIPT:= CONS(A,NIL)
+   OR $( LET S=SCRIPT
+         UNTIL TL!S=NIL
+         DO S:=TL!S
+         TL!S := CONS(A,NIL)  $)
+
+AND COMMENT()
+BE $( LET SUBJECT,COMMENT = TL!(HD!TOKENS),HD!(TL!TOKENS)
+      IF VAL!SUBJECT=NIL
+      DO $( VAL!SUBJECT:= CONS(CONS(0,NIL),NIL)
+            ENTERSCRIPT(SUBJECT) $)
+      IF PROTECTED(SUBJECT) RETURN
+      TL!(HD!(VAL!SUBJECT)):= COMMENT
+      IF COMMENT=NIL & TL!(VAL!SUBJECT)=NIL
+      DO REMOVE(SUBJECT)
+      SAVED:= FALSE
+   $)
+
+AND EVALUATION()
+BE $( LET CODE=EXP()
+      LET CH=HD!TOKENS
+      STATIC $( E=0  $)  ||STATIC SO INVISIBLE TO GARBAGE COLLECTOR
+      UNLESS HAVE('?')| HAVE('!')
+      DO SYNTAX()
+      CHECK(EOL)
+      IF ERRORFLAG RETURN
+      IF ATOBJECT DO $( PRINTOB(CODE) ; NEWLINE()  $)
+      E:=BUILDEXP(CODE)
+      IF ATCOUNT DO RESETGCSTATS()
+      REDS:=0
+      XSUBREDS:= 0
+      EVALUATING:=TRUE
+      PRINTVAL(E,CH='?')
+      NEWLINE()
+      CLOSECHANNELS()
+      EVALUATING:=FALSE
+      IF ATCOUNT DO OUTSTATS()
+   $)
+
+AND ABORDERCOM()
+BE SCRIPT,SAVED := SORT(SCRIPT),FALSE
+
+AND SORT(X) = X=NIL | TL!X=NIL -> X, VALOF
+$( LET A,B,HOLD = NIL,NIL,NIL  ||FIRST SPLIT X
+   UNTIL X=NIL DO HOLD,A,B,X := A,CONS(HD!X,B),HOLD,TL!X
+   A,B := SORT(A),SORT(B)
+   UNTIL A=NIL|B=NIL  ||NOW MERGE THE TWO HALVES BACK TOGETHER
+   DO TEST ALFA.LS(HD!A,HD!B)
+      THEN X,A := CONS(HD!A,X),TL!A
+      OR X,B:= CONS(HD!B,X),TL!B
+   IF A=NIL DO A:=B
+   UNTIL A=NIL DO X,A := CONS(HD!A,X),TL!A
+   RESULTIS REVERSE(X)  $)
+
+AND REORDERCOM()
+BE TEST ISID(HD!TOKENS) & (ISID(HD!(TL!TOKENS)) | HD!(TL!TOKENS)=DOTDOT.SY)
+   THEN SCRIPTREORDER() OR
+   TEST HAVEID() & HD!TOKENS\=EOL
+   THEN $( LET NOS = NIL
+           LET MAX = NO.OF.EQNS(THE.ID)
+           WHILE HAVENUM()
+           DO $( LET A=THE.NUM
+                 LET B = HAVE(DOTDOT.SY) ->
+                         HAVENUM()-> THE.NUM, MAX,  A
+                 FOR I= A TO B
+                 DO IF \MEMBER(NOS,I)& 1<=I<=MAX
+                    DO NOS:= CONS(I,NOS)
+                    ||NOS OUT OF RANGE ARE SILENTLY IGNORED
+              $)
+           CHECK(EOL)
+           IF ERRORFLAG RETURN
+           IF VAL!THE.ID=NIL
+           DO $( DISPLAY(THE.ID,FALSE,FALSE)
+                 RETURN  $)
+           IF PROTECTED(THE.ID) RETURN
+           FOR I= 1 TO MAX
+           DO UNLESS MEMBER(NOS,I)
+              DO NOS:= CONS(I,NOS)
+              || ANY EQNS LEFT OUT ARE TACKED ON AT THE END
+           || NOTE THAT "NOS" ARE IN REVERSE ORDER
+        $( LET NEW = NIL
+           LET EQNS = TL!(VAL!THE.ID)
+           UNTIL NOS=NIL
+           DO $( LET EQN=ELEM(EQNS,HD!NOS)
+                 REMOVELINENO(EQN)
+                 NEW:=CONS(EQN,NEW)
+                 NOS:=TL!NOS  $)
+           ||  NOTE THAT THE EQNS IN "NEW" ARE NOW IN THE CORRECT ORDER
+           TL!(VAL!THE.ID):= NEW
+           DISPLAY(THE.ID,TRUE,FALSE)
+           SAVED:=FALSE
+           CLEARMEMORY()
+        $) $) 
+   OR SYNTAX()
+
+AND SCRIPTREORDER()
+BE $( LET R=NIL
+      WHILE HAVEID()
+      DO TEST HAVE(DOTDOT.SY)
+         THEN $( LET A,B,X = THE.ID,0,NIL
+                 TEST HAVEID() THEN B:= THE.ID OR
+                 IF HD!TOKENS=EOL DO B:= EOL
+                 TEST B=0 THEN SYNTAX() OR X:= EXTRACT(A,B)
+                 IF X=NIL DO SYNTAX()
+                 R:= SHUNT(X,R)  $)
+         OR TEST MEMBER(SCRIPT,THE.ID)
+            THEN R:= CONS(THE.ID,R)
+            OR $( WRITEF("*"%S*" not in script*N",PRINTNAME(THE.ID))
+                  SYNTAX()  $)
+      CHECK(EOL)
+      IF ERRORFLAG RETURN
+   $( LET R1 = NIL
+      UNTIL TL!R=NIL
+      DO $( UNLESS MEMBER(TL!R,HD!R) DO SCRIPT,R1 := SUB1(SCRIPT,HD!R),CONS(HD!R,R1)
+            R:= TL!R  $)
+      SCRIPT:= APPEND(EXTRACT(HD!SCRIPT,HD!R),APPEND(R1,TL!(EXTRACT(HD!R,EOL))))
+      SAVED:= FALSE
+   $) $)
+
+AND NO.OF.EQNS(A) = VAL!A=NIL -> 0, LENGTH(TL!(VAL!A))
+
+AND PROTECTED(A) = VALOF
+  ||LIBRARY FUNCTIONS ARE RECOGNISABLE BY NOT BEING PART OF THE SCRIPT
+$( IF MEMBER(SCRIPT,A) RESULTIS FALSE
+   IF MEMBER(HOLDSCRIPT,A)
+   DO $( UNLESS MEMBER(GET.HITS,A) DO GET.HITS:= CONS(A,GET.HITS)
+         RESULTIS FALSE  $)
+   WRITEF("*"%S*" is predefined and cannot be altered*N",PRINTNAME(A))
+   RESULTIS TRUE  $)
+
+AND REMOVE(A)   || REMOVES "A" FROM THE SCRIPT
+BE $( SCRIPT:= SUB1(SCRIPT,A)
+      VAL!A:= NIL
+   $)
+
+AND EXTRACT(A,B) = VALOF ||RETURNS A SEGMENT OF THE SCRIPT
+$( LET S,X = SCRIPT,NIL
+   UNTIL S=NIL | HD!S=A DO S:= TL!S
+   UNTIL S=NIL | HD!S=B DO X,S := CONS(HD!S,X),TL!S
+   UNLESS S=NIL DO X:= CONS(HD!S,X)
+   IF S=NIL & B\=EOL DO X:= NIL
+   IF X=NIL DO WRITEF("*"%S..%S*" not in script*N",
+                      PRINTNAME(A),B=EOL->"",PRINTNAME(B))
+   RESULTIS REVERSE(X)  $)
+
+AND DELETECOM()
+BE $( LET DLIST = NIL
+      WHILE HAVEID()
+      DO TEST HAVE(DOTDOT.SY)
+         THEN $( LET A,B = THE.ID,EOL
+                 TEST HAVEID()
+                 THEN B:= THE.ID OR
+                 UNLESS HD!TOKENS=EOL DO SYNTAX()
+                 DLIST:= CONS(CONS(A,B),DLIST)  $) OR
+         $( LET MAX = NO.OF.EQNS(THE.ID)
+            LET NLIST = NIL
+            WHILE HAVENUM()
+            DO $( LET A = THE.NUM
+                  LET B = HAVE(DOTDOT.SY) ->
+                          HAVENUM()->THE.NUM,MAX , A
+                  FOR I = A TO B
+                  DO NLIST:= CONS(I,NLIST)
+               $)
+            DLIST:= CONS(CONS(THE.ID,NLIST),DLIST)
+         $)
+      CHECK(EOL)
+      IF ERRORFLAG RETURN
+   $( LET DELS = 0
+      IF DLIST=NIL   ||DELETE ALL
+      DO TEST SCRIPT=NIL THEN DISPLAYALL(FALSE) OR
+         $( UNLESS MAKESURE() RETURN
+            UNTIL SCRIPT=NIL
+            DO $( DELS:= DELS + NO.OF.EQNS(HD!SCRIPT)
+                  VAL!(HD!SCRIPT):= NIL
+                  SCRIPT:= TL!SCRIPT  $) $)
+      UNTIL DLIST = NIL
+      DO TEST ISATOM(TL!(HD!DLIST)) | TL!(HD!DLIST)=EOL ||"NAME..NAME"
+         THEN $( LET X=EXTRACT(HD!(HD!DLIST),TL!(HD!DLIST))
+                 DLIST:= TL!DLIST
+                 UNTIL X=NIL
+                 DO DLIST,X := CONS(CONS(HD!X,NIL),DLIST),TL!X  $) OR
+         $( LET NAME,NOS = HD!(HD!DLIST),TL!(HD!DLIST)
+            LET NEW = NIL
+            DLIST:= TL!DLIST
+            IF VAL!NAME = NIL
+            DO $( DISPLAY(NAME,FALSE,FALSE)
+                  LOOP $)
+            IF PROTECTED(NAME) LOOP
+            TEST NOS=NIL
+            THEN $( DELS:= DELS+NO.OF.EQNS(NAME)
+                    REMOVE(NAME)
+                    LOOP $)
+            OR FOR I = NO.OF.EQNS(NAME) TO 1 BY -1
+               DO TEST MEMBER(NOS,I)
+                  THEN DELS:=DELS+1
+                  OR $( LET EQN=ELEM(TL!(VAL!NAME),I)
+                        REMOVELINENO(EQN)
+                        NEW:=CONS(EQN,NEW)  $)
+            TL!(VAL!NAME):= NEW
+            IF NEW=NIL &
+               TL!(HD!(VAL!NAME))=NIL   ||COMMENT FIELD
+            DO REMOVE(NAME)
+         $) 
+      WRITEF("%N equations deleted *N",DELS)
+      IF DELS>0 DO $( SAVED:= FALSE ; CLEARMEMORY()  $)
+   $) $)
+

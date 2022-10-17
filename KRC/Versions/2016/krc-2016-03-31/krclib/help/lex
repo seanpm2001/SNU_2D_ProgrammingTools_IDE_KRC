@@ -1,0 +1,27 @@
+	SUMMARY OF KRC LEXICAL SYNTAX
+
+    name ::= [a-zA-Z][a-zA-Z0-9'_]*
+    num ::= [0-9]+
+    string ::= "char*"
+    prefix ::= - | # | \
+    infix ::= : | ++ | -- | bar | & | \ | > | >= | == | \= | <= | < |
+              + | - | * | / | % | ** | .
+    op1 ::= infix | # | \
+    char ::= [^NL"\] | \[abfnrtv\'"] | \ddd
+    bar ::= |
+    token ::= name | num | string | op1 | :- | ; | = | , |
+              ( | ) | [ | ] | { | } | .. | <-
+    white-space ::= [ \t]+
+    commentary ::= [^;]+
+
+KEY
+X?      X or empty
+X*      zero or more X's
+X+      one or more X's
+[~]	character class
+[^~]	complement of character class
+NL	newline
+ddd	integer between 0 and 255
+
+NOTES
+* white space must separate tokens that would otherwise form a single token 

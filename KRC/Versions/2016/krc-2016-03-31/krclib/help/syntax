@@ -1,0 +1,28 @@
+    SYNTAX of KRC EXPRESSIONS AND SCRIPTS
+
+    script := def*
+    def ::= eqn NL | comment NL
+    comment ::= name:-commentary;
+    eqn ::= lhs=exp | lhs=exp,exp
+    lhs ::= name formal*
+    formal ::= name | const | (pat) | [pat-list?]
+    pat ::= formal:pat | formal | -num
+    exp ::= prefix exp | exp infix exp | comb
+    comb ::= simple simple*
+    simple ::= name | const | (exp) | [exp-list]
+             | [exp..exp?] | [exp,exp..exp?]
+             | {exp;qualifiers}
+    qualifiers ::= qualifier | qualifier;qualifiers
+    qualifier ::= exp | name-list<-exp
+    const ::= num | string | 'op1'
+
+KEY
+X?	X or empty
+X*	zero or more X's
+X-list  one or more X's separated by `,'
+NL	newline
+
+NOTES
+* {exp;name-list<-...} can be written {exp|name-list<-...}
+* see lexical syntax for:
+        name num string prefix infix op1 commentary

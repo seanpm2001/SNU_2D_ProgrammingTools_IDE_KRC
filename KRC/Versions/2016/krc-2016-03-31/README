@@ -1,0 +1,23 @@
+This is my 1980 implementation of the lazy functional programming
+system, Kent Recursive Calculator, translated from the original BCPL
+source code into C and adapted from EMAS to Unix.
+
+For compilation and installation instructions, see the file INSTALL.
+
+The source files in this directory use a dialect of C very close to the
+style used in the original BCPL. Check the file bcpl.h for a summary of
+this BCPL-like syntax.  I am grateful to Martin Guy for devising this
+translation scheme and for his help in getting KRC running again.  I
+remain responsible for all errors, whether in the original code or in
+its new incarnation.
+
+The original BCPL code can be found in oldbcpl.
+
+A manual for the KRC language and system can be found in doc/krc.1
+
+There is a small collection of example KRC scripts in demo
+
+Bug reports, fixes and comments can be sent to krc@krc-lang.org
+
+        David Turner, University of Kent
+	March 2016

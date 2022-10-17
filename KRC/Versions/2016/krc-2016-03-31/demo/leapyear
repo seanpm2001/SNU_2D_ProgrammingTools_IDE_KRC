@@ -1,0 +1,14 @@
+    feb :- this demonstrates a bug, say
+           feb?
+           and you get 29, but change to
+           year = 2015
+           and feb? crashes.
+           There is no problem if we make feb a function of y;
+
+    feb = 29, leap year
+    feb = 28
+
+    leap y = y % 400 == 0, y % 100 == 0
+           = y % 4 == 0
+
+    year = 2016

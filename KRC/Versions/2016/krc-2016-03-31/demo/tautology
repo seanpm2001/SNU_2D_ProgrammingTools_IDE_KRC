@@ -1,0 +1,36 @@
+    tautology :- a formula of propositional calculus in n variables can
+                 be represented by an n-ary function on truth-values,
+                 tautology tests whether the function represents a
+                 tautology of classical propositional logic;
+    tautology f = f, bool f
+                = tautology (f "TRUE") & tautology (f "FALSE")
+
+    Pierce's_law :- Pierce's law
+                    ((A->B)->A)->A
+                    is interesting because it is not valid in
+                    intuitionistic propositional logic.  Say
+                    tautology Pierce's_law?
+                    to verify that it is tautology of classical logic;
+    Pierce's_law A B = hook (hook (hook A B) A) A
+
+    hook :- material implication, written as -> or a hook in logic books;
+    hook A B = \A | B
+
+    satisfiable f = f, bool f
+                  = satisfiable (f "TRUE") | satisfiable (f "FALSE")
+
+    classify :- determines if a truth function is a tautology,
+                a contradiction or contingent. Try
+                classify P?
+                likewise Q, R, S, defined below;
+    classify f = "tautology", tautology f
+               = "contingent", satisfiable f
+               = "contradiction"
+
+    P A B = hook (A & B) (A | B)
+
+    Q A B = hook (A | B) (A & B)
+
+    R A B = (A | \B) & (B | \A)
+
+    S A B = A & \B & hook A B

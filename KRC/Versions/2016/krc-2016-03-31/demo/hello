@@ -1,0 +1,4 @@
+#! /usr/bin/krc -e main!
+||this shows how to make an executable KRC script
+||say ./hello on Unix command line to run
+main=["hello world",nl]

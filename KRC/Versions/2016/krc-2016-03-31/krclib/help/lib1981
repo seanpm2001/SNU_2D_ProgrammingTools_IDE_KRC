@@ -1,0 +1,292 @@
+||KRC legacy prelude, used with EMAS KRC
+||Copyright (c) D. A. Turner 1981 All rights reserved
+||For distribution terms see file LICENSE included in the distribution
+    abs :- takes the absolute value of a number, e.g. abs (-3) is 3;
+    abs x = x, x >= 0
+          = -x
+
+    and :- applied to a list of truthvalues, takes the logical conjunction;
+    and = fold '&' "TRUE"
+
+    append :- applied to a list of lists, joins them into a single list with `++';
+    append = fold '++' []
+
+    assoc :- takes a list of [key, value] pairs and a value, returning the
+             associated key;
+    assoc ([a,b]:x) a' = b, a == a'
+                       = assoc x a'
+
+    char :- predicate, true on strings of size one, false otherwise
+            (defined in machine code);
+    char = char__
+
+    cjustify :- applied to a number and a string, centre justifies the
+                string in a field of the specified width;
+    cjustify n x = cjustify' (n - printwidth x) x
+    cjustify' n x = [spaces (n / 2),x,spaces ((n + 1) / 2)]
+
+    coalesce :- takes a list of lists and merges them into a single list, by
+                repeated use of "interleave" - differs from "append" in that
+                it will work even if several of the lists are infinite (indeed
+                even if there are an infinite number of infinite lists!);
+    coalesce = fold interleave []
+
+    code :- converts a character to its ascii code number
+            (defined in machine code);
+    code = ord__
+
+    compose :- takes a list of functions and composes them with `.' to make a
+               single function;
+    compose = fold '.' I
+
+    concat :- takes a list of strings and concatenates them into
+              one big string (defined in machine code);
+    concat = implode__
+
+    cons :- adds an element to the front of a list;
+    cons a x = a:x
+
+    decode :- converts an integer to the character of that ascii number
+              (defined in machine code);
+    decode = chr__
+
+    digit :- predicate, true on single digit strings;
+    digit x = char x & "0" <= x <= "9"
+
+    digitval :- returns the numeric value of a digit;
+    digitval x = code x - code "0", digit x
+
+    drop :- `drop n x' returns list x without its first n elements;
+    drop 0 x = x
+    drop n [] = []
+    drop n (a:x) = drop (n - 1) x
+
+    even :- predicate, true on even numbers;
+    even x = x % 2 == 0
+
+    explode :- explodes a string into a list of its constituent characters
+               (defined in machine code);
+    explode = explode__
+
+    false = "FALSE"
+
+    filter :- applied to a predicate and a list returns a list of the
+              elements for which the predicate takes value "TRUE";
+    filter f x = {a|a<-x;f a}
+
+    fold :- folds a list to the right with a given operator and start value.
+            Example: foldr op r [a,b,c] = op a (op b (op c r));
+    fold op s [] = s
+    fold op s (a:x) = op a (fold op s x)
+
+    for :- `for a b f' maps function f over the list of numbers [a..b];
+    for a b f = map f [a..b]
+
+    function :- type testing predicate (defined in machine code);
+    function = function__
+
+    hd :- applied to a non empty list, returns its first element;
+    hd (a:x) = a
+
+    I :- the identity function, applied to any object it returns it;
+    I x = x
+
+    insert :- used by sort, inserts a new value into a sorted list in the
+              correct position to maintain ascending order;
+    insert a [] = [a]
+    insert a (b:x) = a:b:x, a <= b
+                   = b:insert a x
+
+    interleave :- merges two lists by taking members from them alternately;
+    interleave (a:x) y = a:interleave y x
+    interleave [] y = y
+
+    intersection :- takes a list of lists and returns a list of elements common to all;
+    intersection [x] = x
+    intersection (x:xx) = filter (member x) (intersection xx)
+
+    lay :- applied to a list formats it to have one element per line when
+           printed with !;
+    lay [] = []
+    lay (a:x) = show a:nl:lay x
+
+    layn :- similar to `lay', but produces output with numbered lines;
+    layn x = layn' 1 x
+
+    layn' :- (layn' n x) formats list x one element per line with lines
+             numbered from n;
+    layn' n [] = []
+    layn' n (a:x) = rjustify 4 n:")  ":show a:nl:layn' (n + 1) x
+
+    letter :- predicate, true on single letter strings;
+    letter x = uppercase x | lowercase x
+
+    limit :- finds the fixed point, if any, of a function repeatedly applied
+             to an initial value;
+    limit f x = limit f (f x), f x \= x
+              = x
+
+    list :- type testing predicate (defined in machine code);
+    list = list__
+
+    listdiff :- defines the action of the "--" operator;
+    listdiff [] y = []
+    listdiff x [] = x
+    listdiff (a:x) (b:y) = listdiff x y, a == b
+                         = listdiff (a:listdiff x [b]) y
+
+    ljustify :- applied to a number and a string, left justifies the string
+                in a field of the specified width;
+    ljustify n x = [x,spaces (n - printwidth x)]
+
+    lowercase :- predicate, true on lowercase letters;
+    lowercase x = char x & code "a" <= code x <= code "z"
+
+    map :- applied to a function and a list returns the list obtained by
+           applying the function to each element;
+    map f x = {f a|a<-x}
+
+    max :- returns the largest element, under `>', of a list of numbers or strings;
+    max [a] = a
+    max [a,b] = a, a >= b
+              = b
+    max (a:x) = max [a,max x]
+
+    member :- applied to a list and a value returns "TRUE" or "FALSE" as the
+              value is or not present in the list;
+    member [] a = "FALSE"
+    member (a:x) b = a == b | member x b
+
+    min :- returns the least element, under `<', of a list of numbers or strings;
+    min = hd . sort
+
+    mkset :- applied to a list returns the list with duplicate elements removed;
+    mkset x = mkset' x []
+    mkset' [] y = []
+    mkset' (a:x) y = mkset' x y, member y a
+                   = a:mkset' x (a:y)
+
+    neg :- a function with same action as prefix `-';
+    neg x = -x
+
+    nl :- newline;
+    nl = decode 10
+
+    not :- a function with same action as prefix `\';
+    not x = \x
+
+    np :- newpage;
+    np = decode 12
+
+    number :- type testing predicate (defined in machine code);
+    number = number__
+
+    odd :- predicate, true on odd numbers;
+    odd x = \even x
+
+    or :- applied to a list of truthvalues, takes their disjunction;
+    or = fold '|' "FALSE"
+
+    perms :- returns a list of all possible permutations of a given list;
+    perms [] = [[]]
+    perms x = {a:p|a<-x;p<-perms (x -- [a])}
+
+    powerset :- given a set, represented by a list of elements, returns a list of
+                all the subsets that can be formed from it;
+    powerset [] = [[]]
+    powerset (a:x) = powerset' a (powerset x)
+
+    powerset' :- auxiliary function used by powerset;
+    powerset' a p = p ++ {a:y|y<-p}
+
+    printwidth :- for any x, gives width of x on printing (with "!")
+                  (defined in machine code);
+    printwidth = printwidth__
+
+    product :- applied to list of numbers returns their product;
+    product = fold '*' 1
+
+    quote :- quotation mark;
+    quote = decode 34
+
+    read :- takes a file or device name and returns a list of characters
+            (defined in machine code);
+    read = read__
+
+    reverse :- applied to a list returns a list of the same elements in
+               reverse order;
+    reverse [] = []
+    reverse (a:x) = reverse x ++ [a]
+
+    rjustify :- applied to a number and a string, right justifies the string
+                in a field of the specified width;
+    rjustify n x = [spaces (n - printwidth x),x]
+
+    show :- show :- applied to any (non-function) value formats it to show its
+            structure when printed with !;
+    show x = "nl", x == nl
+           = "np", x == np
+           = "tab", x == tab
+           = "vt", x == vt
+           = [quote,x,quote], string x
+           = ["[",show' x,"]"], list x
+           = x
+    show' [] = []
+    show' [a] = [show a]
+    show' (a:x) = show a:",":show' x
+
+    sort :- sort :- of a list of numbers or strings returns an ordered list
+            of the same elements;
+    sort [] = []
+    sort (a:x) = insert a (sort x)
+
+    sp :- single space;
+    sp = " "
+
+    spaces :- applied to a number returns a list of that many spaces;
+    spaces 0 = []
+    spaces n = " ":spaces (n - 1)
+
+    string :- type testing predicate (defined in machine code);
+    string = string__
+
+    sum :- applied to list of numbers returns their sum;
+    sum = fold '+' 0
+
+    tab :- single tab;
+    tab = decode 9
+
+    take :- take :- `take n x' returns a list of the first n elements of list x;
+    take 0 x = []
+    take n [] = []
+    take n (a:x) = a:take (n - 1) x
+
+    tl :- applied to a non-empty list returns it without the first element;
+    tl (a:x) = x
+
+    true = "TRUE"
+
+    union :- returns the union of a list of lists, representing sets;
+    union = mkset . coalesce
+
+    update :- `update f key value' is a function that returns `value' when applied to
+              key and on other inputs behaves as function f;
+    update f x y z = y, z == x
+                   = f z
+
+    uppercase :- predicate, true on uppercase letters;
+    uppercase x = char x & code "A" <= code x <= code "Z"
+
+    vt :- vertical tab;
+    vt = decode 11
+
+    write :- used to mark items to be sent to a file on output with !
+                 write "filename" x
+             where x is any KRC data item (defined in machine code);
+    write = write__
+
+    zip :- applied to a list of lists, returns their transpose (as in matrix
+           transpose, rows and columns interchanged).  Example
+               zip [[1,2,3],[4,5,6]] = [[1,4],[2,5],[3,6]];
+    zip x = [], hd x == []
+          = map hd x:zip (map tl x)
